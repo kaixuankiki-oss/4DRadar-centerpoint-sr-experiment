@@ -46,8 +46,9 @@ python tools/train.py --cfg_file tools/cfgs/radar_models/centerpoint_frame200_35
 ```
 
 Evaluate the selected checkpoints with `tools/test.py` and record the HR4D
-`mAP` values below.  The required comparison is an absolute difference of at
-least `+0.020`.
+`mAP` values below.  Because this experiment has only 200 labelled frames,
+the required comparison is now an absolute difference of at least `+0.050`
+(five percentage points, not a relative percentage).
 
 ## Results
 
@@ -57,4 +58,5 @@ least `+0.020`.
 | sr-0 | neighborhood filling, threshold 0.5, `add_offset=True` | pending GPU run | — | — | blocked: NVIDIA device unavailable in current session |
 
 No mAP value is fabricated.  Once the GPU device is visible, run the two
-commands above with identical options and append the actual evaluation output.
+commands above with identical options and append the actual evaluation output;
+the SR branch is accepted only when `enhanced_mAP - raw_mAP >= 0.050`.

@@ -31,4 +31,6 @@ When a measured SR mAP is below raw mAP + 0.020:
 5. Evaluate both on the same 40 validation frames and append measured mAP and
    absolute delta to `centerpoint_raw_vs_enhanced_350m.md`.
 
-Do not claim success unless the measured absolute delta is at least `+0.020`.
+Because only 200 labelled frames are available, do not claim success unless
+the measured absolute delta is at least `+0.050` (five absolute percentage
+points).
