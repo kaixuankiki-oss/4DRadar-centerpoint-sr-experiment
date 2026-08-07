@@ -15,9 +15,9 @@ Point info files are regenerated after each replacement.
 - Inference: `threshold=0.5`, `add_offset=True`, `is_super_resolution=True`.
 - Full recursive input inventory: 970 raw PCDs; output root contains 970
   corresponding `_SR.pcd` files.
-- CenterPoint status: data-loader smoke test passed for both raw and SR data;
-  GPU training/evaluation is pending because `/dev/nvidia*` is absent in the
-  current session.
+- CenterPoint status: data-loader and GPU one-batch forward/backward smoke tests
+  passed for both raw and SR data.  The default Codex sandbox hides GPU device
+  nodes, so full CUDA jobs must use the approved host execution environment.
 
 ## Iteration template
 

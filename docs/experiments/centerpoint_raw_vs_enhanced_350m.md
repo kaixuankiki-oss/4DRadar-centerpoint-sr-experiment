@@ -54,9 +54,12 @@ the required comparison is now an absolute difference of at least `+0.050`
 
 | run | fill strategy | checkpoint | mAP | absolute delta vs raw | status |
 |---|---|---|---:|---:|---|
-| raw | n/a | pending GPU run | — | — | blocked: NVIDIA device unavailable in current session |
-| sr-0 | neighborhood filling, threshold 0.5, `add_offset=True` | pending GPU run | — | — | blocked: NVIDIA device unavailable in current session |
+| raw | n/a | pending full training | — | — | GPU one-batch forward/backward passed |
+| sr-0 | neighborhood filling, threshold 0.5, `add_offset=True` | pending full training | — | — | GPU one-batch forward/backward passed |
 
-No mAP value is fabricated.  Once the GPU device is visible, run the two
-commands above with identical options and append the actual evaluation output;
-the SR branch is accepted only when `enhanced_mAP - raw_mAP >= 0.050`.
+No mAP value is fabricated.  GPU access is available through the host execution
+environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).
+The RTX 4070 Ti SUPER passed PyTorch CUDA and both raw/SR CenterPoint one-batch
+forward/backward tests on 2026-08-07.  Run the two full training commands above
+with identical options and append the actual evaluation output; the SR branch
+is accepted only when `enhanced_mAP - raw_mAP >= 0.050`.
