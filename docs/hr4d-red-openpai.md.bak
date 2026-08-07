@@ -1,0 +1,102 @@
+# HR-4D Red OpenPAI Training Commands
+
+This note records the offline training commands for the HR-4D radar setup when the raw data root and the PKL directory are separated.
+
+## Paths
+
+Raw data root:
+
+```bash
+/mnt/nas_02
+```
+
+PKL directory:
+
+```bash
+/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend
+```
+
+Train PKLs:
+
+```bash
+infos_train.pkl
+infos_train_bad_demotion.pkl
+```
+
+Test PKLs:
+
+```bash
+infos_test.pkl
+infos_rainy.pkl
+```
+
+The current `RadarDataset` resolves `INFO_PATH` entries as:
+
+- absolute path: use directly
+- relative path: resolve relative to `DATA_CONFIG.DATA_PATH`
+
+For this setup, use absolute PKL paths and keep `DATA_CONFIG.DATA_PATH` pointing at the raw radar data root.
+
+## Single-GPU Training
+
+Run from the repository `tools` directory:
+
+```bash
+cd /workspace/4DRadar/tools
+
+CUDA_VISIBLE_DEVICES=0 python train.py \
+  --cfg_file cfgs/radar_models/pointpillar_radar.yaml \
+  --epochs 40 \
+  --batch_size 8 \
+  --workers 8 \
+  --logger_iter_interval 100 \
+  --extra_tag offline_sep_paths_ep40 \
+  --set \
+  DATA_CONFIG.DATA_PATH /mnt/nas_02 \
+  DATA_CONFIG.INFO_PATH.train "['/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend/infos_train.pkl','/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend/infos_train_bad_demotion.pkl']" \
+  DATA_CONFIG.INFO_PATH.test "['/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend/infos_test.pkl','/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend/infos_rainy.pkl']"
+```
+
+## Multi-GPU Training
+
+For 8 GPUs, use `torchrun`:
+
+```bash
+cd /workspace/4DRadar/tools
+
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 torchrun \
+  --nproc_per_node=8 \
+  train.py \
+  --launcher pytorch \
+  --cfg_file cfgs/radar_models/pointpillar_radar.yaml \
+  --epochs 40 \
+  --batch_size 16 \
+  --workers 8 \
+  --logger_iter_interval 100 \
+  --extra_tag offline_sep_paths_8gpu_ep40 \
+  --set \
+  DATA_CONFIG.DATA_PATH /mnt/nas_02 \
+  DATA_CONFIG.INFO_PATH.train "['/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend/infos_train.pkl','/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend/infos_train_bad_demotion.pkl']" \
+  DATA_CONFIG.INFO_PATH.test "['/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend/infos_test.pkl','/mnt/nas/train/usr/meng.sun3/pkls/radar/LRR610/202606_12W_extend/infos_rainy.pkl']"
+```
+
+In this repository, `--batch_size` is the total batch size across all GPUs.
+
+Example:
+
+- `--batch_size 16` with 8 GPUs means batch size 2 per GPU
+- `--batch_size 32` with 8 GPUs means batch size 4 per GPU
+
+## Optional AMP
+
+If you want mixed precision, add:
+
+```bash
+--use_amp
+```
+
+## Notes
+
+- These commands assume the sample paths stored inside each PKL can be resolved relative to `/mnt/nas_02`.
+- If the paths inside the PKLs point to another root, `DATA_CONFIG.DATA_PATH` must be changed to that actual root.
+- For the first verification run, it is safer to reduce batch size or run fewer epochs before launching the full training job.

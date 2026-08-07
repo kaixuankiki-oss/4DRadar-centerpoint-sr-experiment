@@ -1,0 +1,176 @@
+# Strong highway 4D radar baseline.
+#
+# This config uses the PointPillar-style pillar encoder/backbone with a
+# CenterPoint anchor-free detection head. It is a stronger baseline than
+# AnchorHead PointPillar while staying compatible with the current repository.
+#
+# RadarPillarVFE and PillarAttention are intentionally not enabled here:
+# RadarPillarVFE currently writes voxel_features, but PointPillarScatter expects
+# pillar_features; PillarAttention is not implemented in this repository.
+_BASE_CONFIG_: cfgs/path_configs/hr4d_paths.yaml
+
+CLASS_NAMES: ['Car', 'LargeV', 'Cyclist', 'Pedestrian']
+
+DATA_CONFIG:
+    _BASE_CONFIG_: cfgs/dataset_configs/radar_dataset.yaml
+
+    # Product ODD for this highway experiment: 0-200m forward, +/-20m lateral.
+    # Keep a wide z range so that box filtering does not silently discard labels
+    # or radar returns because of calibration/road-slope variation.
+    POINT_CLOUD_RANGE: [0.0, -20.0, -8.0, 200.0, 20.0, 8.0]
+
+    RADAR_SENSOR: 'RADAR_FRONT'
+    MAX_SWEEPS: 1
+    REQUIRE_ALL_SWEEPS: False
+    FILTER_EMPTY_FILES: True
+    INCLUDE_GT_SPEED: False
+    NUM_POINTS_SENSOR: 'RADAR_FRONT'
+    MIN_GT_POINTS: 0
+
+    CLASS_MAPPING: {
+        'Car': 'Car',
+        'Truck': 'LargeV',
+        'Bus': 'LargeV',
+        'Split_vehicle': 'LargeV',
+        'Split_Vehicle': 'LargeV',
+        'Vehicle_attachment': 'LargeV',
+        'Tricycle': 'Cyclist',
+        'Cyclist': 'Cyclist',
+        'Pedestrian': 'Pedestrian',
+        'Cone': 'Cone',
+        'StaticObstacle': 'StaticObstacle',
+        'Vru_attachment': 'Vru_attachment',
+    }
+
+    MAP_CLASS_TO_KITTI: {
+        'Car': 'Car',
+        'LargeV': 'Car',
+        'Pedestrian': 'Pedestrian',
+        'Cyclist': 'Cyclist',
+    }
+
+    INFO_PATH: {
+        'train': [train_data.pkl],
+        'test': [test_data.pkl],
+    }
+
+    POINT_FEATURE_ENCODING: {
+        encoding_type: absolute_coordinates_encoding,
+        used_feature_list: ['x', 'y', 'z', 'RCS', 'power', 'doppler', 'Vx', 'Vy', 'timestamp'],
+        src_feature_list: ['x', 'y', 'z', 'range', 'doppler', 'sinAzi', 'sinEle', 'RCS', 'power', 'AbsV', 'Vx', 'Vy', 'RangeBin', 'DopplerBin', 'AziBin', 'EleBin', 'PowerBin', 'PhaseBin', 'timestamp'],
+    }
+
+    DATA_PROCESSOR:
+        - NAME: mask_points_and_boxes_outside_range
+          REMOVE_OUTSIDE_BOXES: True
+
+        - NAME: shuffle_points
+          SHUFFLE_ENABLED: {
+            'train': True,
+            'test': False
+          }
+
+        - NAME: transform_points_to_voxels
+          # z voxel size equals z range height so PointPillarScatter keeps nz=1.
+          VOXEL_SIZE: [0.2, 0.2, 16.0]
+          MAX_POINTS_PER_VOXEL: 32
+          MAX_NUMBER_OF_VOXELS: {
+            'train': 12000,
+            'test': 12000
+          }
+
+MODEL:
+    NAME: CenterPoint
+
+    VFE:
+        NAME: PillarVFE
+        WITH_DISTANCE: False
+        USE_ABSLOTE_XYZ: True
+        USE_NORM: True
+        NUM_FILTERS: [64]
+
+    MAP_TO_BEV:
+        NAME: PointPillarScatter
+        NUM_BEV_FEATURES: 64
+
+    BACKBONE_2D:
+        NAME: BaseBEVBackbone
+        LAYER_NUMS: [3, 5, 5]
+        LAYER_STRIDES: [2, 2, 2]
+        NUM_FILTERS: [64, 128, 256]
+        UPSAMPLE_STRIDES: [1, 2, 4]
+        NUM_UPSAMPLE_FILTERS: [128, 128, 128]
+
+    DENSE_HEAD:
+        NAME: CenterHead
+        CLASS_AGNOSTIC: False
+
+        # Keep one head for the first strong baseline. Separate sparse VRU heads
+        # can create large all-negative heatmap losses on batches without VRU.
+        CLASS_NAMES_EACH_HEAD: [
+            ['Car', 'LargeV', 'Cyclist', 'Pedestrian']
+        ]
+
+        SHARED_CONV_CHANNEL: 64
+        USE_BIAS_BEFORE_NORM: True
+        NUM_HM_CONV: 2
+        SEPARATE_HEAD_CFG:
+            HEAD_ORDER: ['center', 'center_z', 'dim', 'rot']
+            HEAD_DICT: {
+                'center': {'out_channels': 2, 'num_conv': 2},
+                'center_z': {'out_channels': 1, 'num_conv': 2},
+                'dim': {'out_channels': 3, 'num_conv': 2},
+                'rot': {'out_channels': 2, 'num_conv': 2},
+            }
+
+        TARGET_ASSIGNER_CONFIG:
+            FEATURE_MAP_STRIDE: 2
+            NUM_MAX_OBJS: 500
+            GAUSSIAN_OVERLAP: 0.1
+            MIN_RADIUS: 2
+
+        LOSS_CONFIG:
+            LOSS_WEIGHTS: {
+                'cls_weight': 1.0,
+                'loc_weight': 2.0,
+                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            }
+
+        POST_PROCESSING:
+            SCORE_THRESH: 0.05
+            POST_CENTER_LIMIT_RANGE: [0.0, -20.0, -8.0, 200.0, 20.0, 8.0]
+            MAX_OBJ_PER_SAMPLE: 500
+            NMS_CONFIG:
+                NMS_TYPE: nms_gpu
+                NMS_THRESH: 0.2
+                NMS_PRE_MAXSIZE: 4096
+                NMS_POST_MAXSIZE: 500
+
+    POST_PROCESSING:
+        RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
+        EVAL_METRIC:
+            NAME: hr4d
+            HR4D_EVAL_SENSOR: RADAR
+            EVAL_RANGE: [0, 200]
+            FAR_DYNAMIC_VEHICLE: [100, 200]
+
+OPTIMIZATION:
+    BATCH_SIZE_PER_GPU: 32
+    NUM_EPOCHS: 40
+
+    OPTIMIZER: adam_onecycle
+    LR: 0.003
+    WEIGHT_DECAY: 0.01
+    MOMENTUM: 0.9
+
+    MOMS: [0.95, 0.85]
+    PCT_START: 0.3
+    DIV_FACTOR: 10
+    DECAY_STEP_LIST: [35, 45]
+    LR_DECAY: 0.1
+    LR_CLIP: 0.0000001
+
+    LR_WARMUP: False
+    WARMUP_EPOCH: 1
+
+    GRAD_NORM_CLIP: 10

@@ -1,0 +1,82 @@
+DATASET: 'RadarDataset'
+# X/Y grid dimensions must be divisible by 16 for the SECOND backbone.
+POINT_CLOUD_RANGE: [-120.0, -80.0, -8.0, 260.8, 80.0, 8.0]
+
+RADAR_SENSOR: 'RADAR_FRONT'
+MAX_SWEEPS: 4
+REQUIRE_ALL_SWEEPS: True
+FILTER_EMPTY_FILES: True
+INCLUDE_GT_SPEED: False
+NUM_POINTS_SENSOR: 'RADAR_FRONT'
+MIN_GT_POINTS: 0
+
+CLASS_MAPPING: {
+    'Car': 'Car',
+    'Truck': 'LargeVehicle',
+    'Bus': 'LargeVehicle',
+    'Split_vehicle': 'LargeVehicle',
+    'Tricycle': 'Cyclist',
+    'Cyclist': 'Cyclist',
+    'Pedestrian': 'Pedestrian'
+}
+
+MAP_CLASS_TO_KITTI: {
+    'Car': 'Car',
+    'LargeVehicle': 'Truck',
+    'Pedestrian': 'Pedestrian',
+    'Cyclist': 'Cyclist',
+}
+
+EVAL_METRIC:
+    NAME: hr4d
+    HR4D_EVAL_SENSOR: RADAR
+    EVAL_RANGE: [0, 300]
+    FAR_DYNAMIC_VEHICLE: [100, 200]
+
+DATA_SPLIT: {
+    'train': train,
+    'test': test
+}
+
+INFO_PATH: {
+    'train': [splits/hr4d_1000_v1/infos_train_800.pkl],
+    'test': [splits/hr4d_1000_v1/infos_test_200.pkl],
+}
+
+POINT_FEATURE_ENCODING: {
+    encoding_type: absolute_coordinates_encoding,
+    used_feature_list: ['x', 'y', 'z', 'RCS', 'power', 'doppler', 'Vx', 'Vy', 'timestamp'],
+    src_feature_list: ['x', 'y', 'z', 'range', 'doppler', 'sinAzi', 'sinEle', 'RCS', 'power', 'AbsV', 'Vx', 'Vy', 'RangeBin', 'DopplerBin', 'AziBin', 'EleBin', 'PowerBin', 'PhaseBin', 'timestamp'],
+}
+
+DATA_AUGMENTOR:
+    # Default geometry augmentation changes xyz but not radar Vx/Vy features.
+    # Keep it disabled until radar-aware velocity augmentation is implemented.
+    DISABLE_AUG_LIST: ['random_world_flip', 'random_world_rotation', 'random_world_scaling']
+    AUG_CONFIG_LIST:
+        - NAME: random_world_flip
+          ALONG_AXIS_LIST: ['x', 'y']
+
+        - NAME: random_world_rotation
+          WORLD_ROT_ANGLE: [-0.39269908, 0.39269908]
+
+        - NAME: random_world_scaling
+          WORLD_SCALE_RANGE: [0.95, 1.05]
+
+DATA_PROCESSOR:
+    - NAME: mask_points_and_boxes_outside_range
+      REMOVE_OUTSIDE_BOXES: True
+
+    - NAME: shuffle_points
+      SHUFFLE_ENABLED: {
+        'train': True,
+        'test': False
+      }
+
+    - NAME: transform_points_to_voxels
+      VOXEL_SIZE: [0.2, 0.2, 0.4]
+      MAX_POINTS_PER_VOXEL: 10
+      MAX_NUMBER_OF_VOXELS: {
+        'train': 80000,
+        'test': 80000
+      }

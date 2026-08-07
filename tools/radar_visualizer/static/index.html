@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>4D Radar 数据可视化</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">PKL DATA INSPECTOR</p>
+      <h1>4D Radar 数据可视化</h1>
+    </div>
+    <div class="dataset-summary">
+      <span id="datasetStatus">正在读取数据...</span>
+      <span class="status-dot"></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="toolbar panel">
+      <div class="frame-nav">
+        <button id="prevButton" title="上一帧">‹</button>
+        <button id="playButton" title="播放">播放</button>
+        <button id="nextButton" title="下一帧">›</button>
+      </div>
+      <label class="field wide">
+        <span>可用帧</span>
+        <select id="frameSelect"></select>
+      </label>
+      <label class="field search-field">
+        <span>搜索 frame_id</span>
+        <span class="search-control">
+          <input id="frameSearch" type="search" placeholder="输入完整 frame_id">
+          <button id="searchButton">搜索</button>
+        </span>
+      </label>
+      <label class="field">
+        <span>显示范围</span>
+        <select id="rangeSelect">
+          <option value="80">80 m</option>
+          <option value="150" selected>150 m</option>
+          <option value="200">200 m</option>
+          <option value="300">300 m</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Radar 着色</span>
+        <select id="colorMode">
+          <option value="doppler">Doppler</option>
+          <option value="RCS">RCS</option>
+          <option value="AbsV">绝对速度 AbsV</option>
+          <option value="Vx">Body 速度 Vx</option>
+          <option value="Vy">Body 速度 Vy</option>
+          <option value="power">Power</option>
+          <option value="range">Range</option>
+          <option value="z">高度 Z</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="workspace">
+      <article class="panel viewport-panel">
+        <div class="panel-title">
+          <div>
+            <span class="kicker">IMAGE VIEW</span>
+            <h2>前广图像 + 真值标注</h2>
+          </div>
+          <label class="switch"><input id="radarProjectionToggle" type="checkbox" checked><span>Radar 投影</span></label>
+        </div>
+        <div class="image-stage" id="imageStage">
+          <img id="cameraImage" alt="前广图像">
+          <canvas id="imageCanvas"></canvas>
+          <div class="empty-state" id="imageEmpty">当前帧没有本地图像</div>
+        </div>
+      </article>
+
+      <article class="panel viewport-panel">
+        <div class="panel-title">
+          <div>
+            <span class="kicker">BIRD'S-EYE VIEW · FLU</span>
+            <h2>多传感器点云 + 真值标注</h2>
+          </div>
+          <div class="bev-actions">
+            <div class="legend" id="legend"></div>
+            <div class="zoom-controls">
+              <button id="zoomOutButton" title="缩小点云视图">−</button>
+              <button id="zoomResetButton" title="复位缩放">1.0×</button>
+              <button id="zoomInButton" title="放大点云视图">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="bev-stage">
+          <canvas id="bevCanvas"></canvas>
+          <div class="colorbar"><span id="colorMin">-</span><div class="gradient"></div><span id="colorMax">-</span></div>
+        </div>
+      </article>
+
+      <aside class="panel sidebar">
+        <div class="panel-title compact">
+          <div>
+            <span class="kicker">LAYERS</span>
+            <h2>图层与帧信息</h2>
+          </div>
+        </div>
+        <div class="layers">
+          <label><input type="checkbox" data-layer="radar_front" checked><i class="dot radar"></i><span><b>radar_front</b><small>4D Radar</small></span></label>
+          <label><input type="checkbox" data-layer="lidar_front_2" checked><i class="dot atx"></i><span><b>lidar_front_2</b><small>ATX 激光雷达</small></span></label>
+          <label><input type="checkbox" data-layer="lidar_front" checked><i class="dot em4"></i><span><b>lidar_front</b><small>EM4 激光雷达</small></span></label>
+          <label><input type="checkbox" data-layer="annotations" checked><i class="dot gt"></i><span><b>Ground Truth</b><small>3D 标注真值</small></span></label>
+          <label><input type="checkbox" data-layer="detections" checked><i class="dot det"></i><span><b>Detections</b><small>检测框叠加</small></span></label>
+          <label><input type="checkbox" data-layer="tracks" checked><i class="dot track"></i><span><b>Tracks</b><small>跟踪框与 ID</small></span></label>
+        </div>
+        <div class="info-list" id="frameInfo"></div>
+        <div class="feature-card">
+          <span class="kicker">RADAR FEATURE</span>
+          <h3 id="featureName">Doppler</h3>
+          <div class="feature-values">
+            <span><small>MIN</small><b id="featureMin">-</b></span>
+            <span><small>MEDIAN</small><b id="featureMedian">-</b></span>
+            <span><small>MAX</small><b id="featureMax">-</b></span>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+  <div class="toast" id="toast"></div>
+  <div class="loading" id="loading"><span></span>正在解析 PCD...</div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

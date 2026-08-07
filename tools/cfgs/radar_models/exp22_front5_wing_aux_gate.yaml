@@ -1,0 +1,76 @@
+_BASE_CONFIG_: cfgs/radar_models/centerpoint_highway_0_200m_split_minpts3.yaml
+
+OUTPUT_ROOT: /experiments/a100_radial_wing_multiframe_output
+
+DATA_CONFIG:
+    _BASE_CONFIG_: cfgs/dataset_configs/radar_dataset.yaml
+
+    DATA_PATH: /data/highway_sweeps
+    PKL_PATH: /data/highway_sweeps
+    RADAR_SENSOR: 'RADAR_FRONT'
+    NUM_POINTS_SENSOR: 'RADAR_FRONT'
+    MAX_SWEEPS: 5
+    REQUIRE_ALL_SWEEPS: False
+    FILTER_EMPTY_FILES: True
+    INCLUDE_GT_SPEED: False
+    MIN_GT_POINTS: 3
+
+    POINT_CLOUD_RANGE: [0.0, -20.0, -8.0, 200.0, 20.0, 8.0]
+
+    CLASS_MAPPING: {
+        'Car': 'Car',
+        'Truck': 'LargeV',
+        'Bus': 'LargeV',
+        'Split_vehicle': 'LargeV',
+        'Split_Vehicle': 'LargeV',
+        'Vehicle_attachment': 'LargeV',
+        'Tricycle': 'Cyclist',
+        'Cyclist': 'Cyclist',
+        'Pedestrian': 'Pedestrian',
+        'Cone': 'Cone',
+        'StaticObstacle': 'StaticObstacle',
+        'Vru_attachment': 'Vru_attachment',
+    }
+
+    MAP_CLASS_TO_KITTI: {
+        'Car': 'Car',
+        'LargeV': 'Car',
+        'Pedestrian': 'Pedestrian',
+        'Cyclist': 'Cyclist',
+    }
+
+    INFO_PATH: {
+        'train': [highway_train.pkl],
+        'test': [highway_test.pkl],
+    }
+
+    POINT_FEATURE_ENCODING: {
+        encoding_type: absolute_coordinates_encoding,
+        used_feature_list: ['x', 'y', 'z', 'RCS', 'power', 'doppler', 'Vx', 'Vy', 'timestamp'],
+        src_feature_list: ['x', 'y', 'z', 'range', 'doppler', 'sinAzi', 'sinEle', 'RCS', 'power', 'AbsV', 'Vx', 'Vy', 'RangeBin', 'DopplerBin', 'AziBin', 'EleBin', 'PowerBin', 'PhaseBin', 'timestamp'],
+    }
+
+    DATA_PROCESSOR:
+        - NAME: mask_points_and_boxes_outside_range
+          REMOVE_OUTSIDE_BOXES: True
+
+        - NAME: shuffle_points
+          SHUFFLE_ENABLED: {
+            'train': True,
+            'test': False
+          }
+
+        - NAME: transform_points_to_voxels
+          VOXEL_SIZE: [0.2, 0.2, 16.0]
+          MAX_POINTS_PER_VOXEL: 32
+          MAX_NUMBER_OF_VOXELS: {
+            'train': 12000,
+            'test': 12000
+          }
+
+MODEL:
+    MAP_TO_BEV:
+        NAME: WingAwarePointPillarScatter
+        NUM_BEV_FEATURES: 64
+        WING_GATE_CHANNELS: 16
+        WING_GATE_SCALE: 0.5

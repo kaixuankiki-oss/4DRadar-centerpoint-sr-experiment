@@ -1,0 +1,21 @@
+# Paths are resolved relative to the repository root unless they are absolute.
+# Keep machine-specific absolute paths out of model and dataset configurations.
+OUTPUT_ROOT: output
+
+DATA_CONFIG:
+    DATA_PATH: data/1000_original_data
+    PKL_PATH: data/1000_original_data
+    STORAGE:
+        TYPE: file
+        INFO_TYPE: file
+        TOS:
+            BUCKET: ''
+            PREFIX: ''
+            REMAP_HR4D_ORIGINAL_PATHS: True
+            ENDPOINT: ''
+            REGION: ''
+            REQUEST_TIMEOUT: 600
+            MAX_CONNECTIONS: 1024
+            CONNECTION_TIME: 60
+            SOCKET_TIMEOUT: 600
+            MAX_RETRY_COUNT: 5
