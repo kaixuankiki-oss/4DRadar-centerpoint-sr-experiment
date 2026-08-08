@@ -514,7 +514,7 @@ points).
   Cyclist recall was preserved, but the RCS-25 additions reduced Car and
   LargeVehicle AP relative to sr-6.
 
-## sr-28 — ultra-high-RCS static support (planned)
+## sr-28 — ultra-high-RCS static support
 
 - Motivation: sr-27's 688 estimated static additions were still enough to
   disturb convergence. Raise the static threshold to 30 dB, where the offline
@@ -523,4 +523,23 @@ points).
 - Only `strong_static_min_rcs` changes from sr-27 (`25 -> 30`). All sr-6
   dynamic/dense rules, point features, geometry, split, seed and CenterPoint
   settings remain unchanged.
-- Status: pending implementation and full overwrite/training run.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 40,
+  mAP `0.0433658046`, absolute delta `-0.1507492921` versus raw; failed.
+  Even the sparse RCS≥30 additions changed the small-data training balance,
+  so this branch is not retained as the preferred strategy.
+
+## sr-29 — PCA dense support with provenance-aware RCS attenuation (running)
+
+- Motivation: sr-7 is the strongest measured branch, while prior global
+  attenuation changed both dynamic and dense evidence together. This test
+  keeps sr-7 geometry and gates, but attenuates only synthetic dense-support
+  RCS to `0.8`; raw points and dynamic synthetic points remain unchanged.
+  The hypothesis is that dense slow returns should provide occupancy without
+  overpowering measured dynamic evidence.
+- Only `dense_expand_rcs_scale=0.8` is new. Learned SR points remain disabled
+  (`sr_min_rcs=1e9`), raw points are preserved exactly, `add_offset=True`,
+  split/seed/config/range are unchanged, and inference does not read labels.
+- The pipeline overwrites all 970 `_SR.pcd` files, rebuilds train/val PKLs,
+  and runs the fixed 40-epoch CenterPoint experiment. The result will be
+  appended here and to the 350m comparison table before the next strategy.
