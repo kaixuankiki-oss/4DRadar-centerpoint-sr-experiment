@@ -102,7 +102,9 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-44 | sr-7 geometry with dynamic-only synthetic RCS × 0.5 | `checkpoint_epoch_36.pth` | 0.215959 | +0.021844 | improved; new best, still below target |
 | sr-45 | sr-7 geometry with dynamic-only synthetic RCS × 0.25 | `checkpoint_epoch_33.pth` | 0.217340 | +0.023225 | improved; new best, vehicle evidence weak |
 | sr-46 | sr-45 plus dynamic-only synthetic AbsV × 1.5 | `checkpoint_epoch_40.pth` | 0.035500 | -0.158615 | failed; Cyclist convergence removed |
-| sr-47 | paired FP32 raw vs sr-45 fill audit | running | — | — | active; test AMP sensitivity with identical settings |
+| raw-47 | raw points, FP32 paired audit | `checkpoint_epoch_40.pth` | 0.203272 | reference | paired reference for sr-47 |
+| sr-47 | sr-45 fill, FP32 paired audit | `checkpoint_epoch_37.pth` | 0.214709 | +0.011437 vs raw-47 | improved; below paired +0.050 target |
+| sr-48 | seed-42 AMP paired raw vs sr-45 fill audit | running | — | — | active; initialization robustness audit |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).

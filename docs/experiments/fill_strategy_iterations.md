@@ -856,7 +856,7 @@ points).
   removed Cyclist convergence, so provenance feature amplification is
   rejected.
 
-## sr-47 — paired FP32 stability audit on sr-45 fill (running)
+## sr-47 — paired FP32 stability audit on sr-45 fill
 
 - Motivation: sr-43 proves exact runs are reproducible, but tiny feature
   changes still switch between high and collapsed regimes. AMP logs repeatedly
@@ -870,3 +870,23 @@ points).
   are both trained from scratch without `--use_amp`, using the same config,
   40 epochs, seed, workers, split and five single-frame features. The only
   difference within this pair is raw versus enhanced INFO_PATH.
+- Both 40-epoch runs completed with finite FP32 gradient norms. Raw selected
+  epoch 40 at mAP `0.2032722105`; enhanced selected epoch 37 at
+  `0.2147088606`, a paired absolute gain of only `+0.0114366501`. Raw
+  Car/LargeVehicle/Cyclist AP were
+  `0.1288773060/0.0476059923/0.4333333333`; enhanced values were
+  `0.1017018969/0.1090913517/0.4333333333`. FP32 shifts the benefit to
+  LargeVehicle and removes the AMP Cyclist gain, but does not meet +0.050.
+
+## sr-48 — seed-42 paired AMP robustness audit (running)
+
+- Motivation: the 200-frame dataset yields strongly initialization-dependent
+  class tradeoffs. Evaluate a second fixed initialization as a strict pair,
+  rather than comparing an enhanced run against the seed-666 raw checkpoint.
+- Code change: expose `--random_seed` in `tools/train.py` (default 666 keeps
+  all historical commands unchanged) and use it for both process RNG and
+  dataloader seed when `--fix_random_seed` is enabled.
+- Regenerate exact sr-45 PCDs in place, then train raw and enhanced with AMP,
+  seed 42, the same 160/40 split, config, 40 epochs, workers and five
+  single-frame features. Only INFO_PATH differs within the pair. Acceptance
+  requires enhanced minus its seed-42 raw reference to be at least 0.050.

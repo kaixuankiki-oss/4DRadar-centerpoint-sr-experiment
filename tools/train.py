@@ -121,6 +121,8 @@ def parse_config():
     parser.add_argument('--tcp_port', type=int, default=18888, help='tcp port for distrbuted training')
     parser.add_argument('--sync_bn', action='store_true', default=False, help='whether to use sync bn')
     parser.add_argument('--fix_random_seed', action='store_true', default=False, help='')
+    parser.add_argument('--random_seed', type=int, default=666,
+                        help='base seed used when --fix_random_seed is enabled')
     parser.add_argument('--ckpt_save_interval', type=int, default=1, help='number of training epochs')
     parser.add_argument(
         '--local_rank', '--local-rank', dest='local_rank', type=int, default=None,
@@ -189,7 +191,7 @@ def main():
     args.epochs = cfg.OPTIMIZATION.NUM_EPOCHS if args.epochs is None else args.epochs
 
     if args.fix_random_seed:
-        common_utils.set_random_seed(666 + cfg.LOCAL_RANK)
+        common_utils.set_random_seed(args.random_seed + cfg.LOCAL_RANK)
 
     output_dir, training_source = resolve_training_output_dir(
         cfg.get('OUTPUT_ROOT', 'output'), cfg.ROOT_DIR,
@@ -252,7 +254,7 @@ def main():
         training=True,
         merge_all_iters_to_one_epoch=args.merge_all_iters_to_one_epoch,
         total_epochs=args.epochs,
-        seed=666 if args.fix_random_seed else None
+        seed=args.random_seed if args.fix_random_seed else None
     )
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=train_set)
