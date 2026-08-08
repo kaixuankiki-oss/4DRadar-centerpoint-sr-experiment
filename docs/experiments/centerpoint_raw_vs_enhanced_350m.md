@@ -76,7 +76,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-18 | sr-7 plus anisotropy-aware dynamic support | `checkpoint_epoch_36.pth` | 0.181160 | -0.012955 | failed; dynamic PCA still lost vehicle/Cyclist balance |
 | sr-19 | sr-6 plus lateral PCA only for dense seeds at 40–45m | `checkpoint_epoch_37.pth` | 0.046777 | -0.147338 | failed; range-only orientation gate still destabilized convergence |
 | sr-20 | sr-6 plus PCA lateral support at 42–43.5m, RCS 5–12 | `checkpoint_epoch_40.pth` | 0.046709 | -0.147406 | failed; narrow range/RCS gate still destabilized convergence |
-| sr-21 | sr-6 with dynamic raw-support gate `|AbsV|>=3.0` (dense support unchanged) | pending | — | — | queued; inference/training launched through host controller |
+| sr-21 | sr-6 with dynamic raw-support gate `|AbsV|>=3.0` (dense support unchanged) | `checkpoint_epoch_34.pth` | 0.180762 | -0.013353 | failed; stricter dynamic gate removed useful support |
+| sr-22 | sr-6 geometry/gates with synthetic-support AbsV × 0.5 | pending | — | — | planned; feature-strength ablation |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).

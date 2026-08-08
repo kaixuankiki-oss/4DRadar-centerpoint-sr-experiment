@@ -383,7 +383,7 @@ points).
   `-0.1474062218`; failed. Even the two-dimensional feature gate did not
   retain sr-6 convergence, so orientation changes are abandoned.
 
-## sr-21 — higher-confidence dynamic support (running)
+## sr-21 — higher-confidence dynamic support
 
 - Motivation: retain sr-6's fixed longitudinal geometry and dense-slow support,
   but remove lower-confidence dynamic expansions. The offline audit raises
@@ -393,5 +393,22 @@ points).
 - Only `raw_expand_min_abs_v` changes from sr-6 (`1.5 -> 3.0`). All feature
   values, coordinates, point count rules, split, seed and CenterPoint settings
   are otherwise identical.
-- Status: full overwrite inference, PKL rebuild and 40-epoch training are
-  running through the host controller.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed
+  through the host controller. The shared output contains 970 freshly
+  rewritten `_SR.pcd` files. Best checkpoint: epoch 34, mAP
+  `0.1807617954`, absolute delta `-0.0133533013` versus raw; failed. The
+  stricter dynamic gate removed useful support and did not preserve sr-6's
+  convergence.
+
+## sr-22 — dense-support feature-strength ablation (planned)
+
+- Motivation: sr-21 confirms that reducing dynamic candidate count alone is
+  not enough. The next controlled test keeps sr-6 geometry and candidate
+  gates, but attenuates only the copied AbsV on synthetic raw-support points
+  to reduce pillar-feature distortion while leaving RCS, coordinates and
+  occupancy unchanged.
+- Only `raw_expand_absv_scale` changes from sr-6 (`1.0 -> 0.5`); raw points,
+  dynamic/dense geometry, learned-SR gates, split, seed and CenterPoint
+  settings remain unchanged. Inference remains label-independent and uses
+  `add_offset=True`.
+- Status: pending implementation and full overwrite/training run.
