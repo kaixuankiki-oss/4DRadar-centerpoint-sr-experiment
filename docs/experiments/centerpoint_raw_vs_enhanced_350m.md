@@ -69,7 +69,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-11 | sr-6 + internal interpolation for lateral dense clusters | `checkpoint_epoch_37.pth` | 0.055280 | -0.138835 | failed; sr-7 remains best |
 | sr-12 | sr-6 fixed-axis dense gate relaxed to 6 points/RCS 2 | `checkpoint_epoch_38.pth` | 0.060416 | -0.133699 | failed; relaxed gate did not recover convergence |
 | sr-13 | sr-7 + second lateral voxel for PCA ratio ≥ 10 | `checkpoint_epoch_31.pth` | 0.049283 | -0.144832 | failed; extra lateral pillar occupancy destroyed late convergence |
-| sr-14 | sr-7 geometry with synthetic-support RCS × 0.5 | pending | — | — | running; only generated feature strength changes |
+| sr-14 | sr-7 geometry with synthetic-support RCS × 0.5 | `checkpoint_epoch_37.pth` | 0.162134 | -0.031981 | failed; lower synthetic RCS weakened vehicle evidence |
+| sr-15 | sr-7 geometry with synthetic-support RCS × 1.5 | pending | — | — | running; feature-only sweep above sr-7's scale 1.0 |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).

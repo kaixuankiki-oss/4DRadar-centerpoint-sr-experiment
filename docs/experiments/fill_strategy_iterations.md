@@ -283,7 +283,7 @@ points).
   voxel altered enough pillar occupancy to destroy the late convergence, so
   adding extra points to sr-7 is rejected.
 
-## sr-14 — RCS-attenuated sr-7 support (running)
+## sr-14 — RCS-attenuated sr-7 support
 
 - Motivation: sr-13 showed that changing occupancy is especially harmful on
   this 200-frame split. sr-14 keeps sr-7's point locations and count exactly,
@@ -292,5 +292,21 @@ points).
   The raw points are untouched; sr-14 uses RCS scale `0.5` and AbsV scale
   `1.0` for dynamic and dense additions. Learned SR candidates remain gated
   off, and `add_offset=True` remains explicit.
-- Status: full overwrite inference, PKL rebuild, and fixed-config training
-  are running through `frame200_job_control.sh`.
+- Full overwrite inference, PKL rebuild, and fixed-config training completed.
+  Best result: epoch 37, mAP `0.1621342172`, absolute delta
+  `-0.0319808795`; failed. Cyclist AP remained `0.3193`, but the lower
+  synthetic RCS reduced Car/LargeVehicle evidence. Since scale `1.0` in sr-7
+  measured `0.209153`, the next ablation tests the other direction without
+  changing geometry or occupancy.
+
+## sr-15 — RCS-amplified sr-7 support (running)
+
+- Motivation: the controlled feature-only sweep shows mAP increasing from
+  scale `0.5` (`0.162134`) to scale `1.0` (`0.209153`). sr-15 tests whether
+  stronger synthetic support can cross the required `0.244115` threshold.
+- Strategy: exact sr-7 point locations, point count, gates, PCA orientation,
+  split, config and seed; only synthetic raw-support RCS changes to scale
+  `1.5`. Raw `x,y,z,RCS,AbsV` values remain untouched and learned candidates
+  remain disabled.
+- Status: full overwrite inference, PKL rebuild, and 40-epoch training are
+  running through the host controller.
