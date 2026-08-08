@@ -356,7 +356,7 @@ points).
   `-0.0129547330`; failed. The dynamic PCA gate improved over several feature
   ablations but still lost sr-7's vehicle/Cyclist balance.
 
-## sr-19 — range-isolated lateral correction (running)
+## sr-19 — range-isolated lateral correction
 
 - Motivation: the missed stationary validation Tricycle's two dense cells are
   around 42–43m with local PCA ratios above 10. sr-19 keeps sr-6's strong
@@ -365,5 +365,18 @@ points).
 - This narrows sr-7's orientation change from thousands of cells to the small
   feature/range-defined subset around the observed cross-traffic geometry;
   all raw points and feature values remain exact.
-- Status: full overwrite inference, PKL rebuild and 40-epoch training are
-  running through the host controller.
+- Full overwrite inference, PKL rebuild, and fixed-config training completed.
+  Best result: epoch 37, mAP `0.0467770365`, absolute delta
+  `-0.1473380602`; failed. Even the 40–45m range gate changed enough dense
+  cells to lose convergence, so the next test narrows by both range and RCS.
+
+## sr-20 — narrow RCS/range lateral correction (running)
+
+- Motivation: the missed stationary Tricycle's two PCA cells have ranges
+  42.19/42.81m and representative RCS 10.21/7.18. sr-20 retains sr-6's
+  longitudinal support except for strong-PCA dense cells in range 42–43.5m
+  and representative RCS 5–12, minimizing unrelated orientation changes.
+- The gate uses only raw point count, RCS, AbsV, range and local occupancy; no
+  annotations are read by inference.
+- Status: implementation and full overwrite/PKL/40-epoch training are being
+  prepared.

@@ -2759,6 +2759,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dense_expand_min_axis_ratio: float = 1.0,
                      dense_expand_adaptive_min_range: Optional[float] = None,
                      dense_expand_adaptive_max_range: Optional[float] = None,
+                     dense_expand_adaptive_min_rcs: Optional[float] = None,
+                     dense_expand_adaptive_max_rcs: Optional[float] = None,
                      dense_expand_lateral_steps: int = 1,
                      dense_expand_lateral_min_ratio: float = 1.0,
                      dense_expand_keep_longitudinal: bool = False,
@@ -2827,6 +2829,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         dense_expand_lateral_min_ratio: 只有PCA各向异性达到该阈值时才使用额外横向步数。
         dense_expand_adaptive_min_range/max_range: PCA方向切换的距离门控；
             不满足时保留默认纵向方向。
+        dense_expand_adaptive_min_rcs/max_rcs: PCA方向切换的代表RCS门控。
         dense_expand_keep_longitudinal: 自适应横向扩展时同时保留原纵向邻格。
         dense_expand_require_adaptive_axis: 丢弃未通过PCA横向门控的普通密集慢速种子。
         bridge_dense_raw: 在高各向异性横向慢速密集种子之间插值内部空网格。
@@ -3148,6 +3151,10 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                         dense_expand_adaptive_max_range is not None and
                         dense_expand_adaptive_min_range >= dense_expand_adaptive_max_range):
                     raise ValueError('dense adaptive range gate must be increasing')
+                if (dense_expand_adaptive_min_rcs is not None and
+                        dense_expand_adaptive_max_rcs is not None and
+                        dense_expand_adaptive_min_rcs >= dense_expand_adaptive_max_rcs):
+                    raise ValueError('dense adaptive RCS gate must be increasing')
                 dense_seeds = []
                 for source, voxel_indices in raw_indices_by_voxel.items():
                     if len(voxel_indices) < dense_expand_min_points:
@@ -3181,7 +3188,15 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                              _raw_field('x', seed_i), _raw_field('y', seed_i),
                              _raw_field('z', seed_i)])) < dense_expand_adaptive_max_range)
                     )
+                    adaptive_rcs_allowed = (
+                        (dense_expand_adaptive_min_rcs is None or
+                         _raw_field('RCS', seed_i) >= dense_expand_adaptive_min_rcs)
+                        and
+                        (dense_expand_adaptive_max_rcs is None or
+                         _raw_field('RCS', seed_i) < dense_expand_adaptive_max_rcs)
+                    )
                     if (dense_expand_adaptive_axis and adaptive_range_allowed and
+                            adaptive_rcs_allowed and
                             len(dense_centers) >= 2):
                         delta = dense_centers - dense_centers[seed_index]
                         nearby = dense_centers[
@@ -3563,6 +3578,10 @@ def main():
                         help='PCA方向切换的最小距离（米）')
     parser.add_argument('--dense_expand_adaptive_max_range', type=float, default=None,
                         help='PCA方向切换的最大距离（米，右开）')
+    parser.add_argument('--dense_expand_adaptive_min_rcs', type=float, default=None,
+                        help='PCA方向切换的最小代表 RCS')
+    parser.add_argument('--dense_expand_adaptive_max_rcs', type=float, default=None,
+                        help='PCA方向切换的最大代表 RCS（右开）')
     parser.add_argument('--dense_expand_lateral_steps', type=int, default=1,
                         help='PCA横向密集簇扩展的最大网格步数')
     parser.add_argument('--dense_expand_lateral_min_ratio', type=float, default=1.0,
@@ -3764,6 +3783,8 @@ def main():
                 dense_expand_min_axis_ratio=args.dense_expand_min_axis_ratio,
                 dense_expand_adaptive_min_range=args.dense_expand_adaptive_min_range,
                 dense_expand_adaptive_max_range=args.dense_expand_adaptive_max_range,
+                dense_expand_adaptive_min_rcs=args.dense_expand_adaptive_min_rcs,
+                dense_expand_adaptive_max_rcs=args.dense_expand_adaptive_max_rcs,
                 dense_expand_lateral_steps=args.dense_expand_lateral_steps,
                 dense_expand_lateral_min_ratio=args.dense_expand_lateral_min_ratio,
                 dense_expand_keep_longitudinal=args.dense_expand_keep_longitudinal,
