@@ -108,9 +108,10 @@ forward/backward tests on 2026-08-07.  The SR branch is accepted only when
 
 ## Host-side job control
 
-Inference and training are launched in a detached process group so they
-survive an SSH disconnect. From the repository root, the physical host can
-control the active stage with:
+Inference and training are launched as a user-level systemd service. The host
+has user lingering enabled, so the service survives a complete SSH logout and
+does not depend on the Codex terminal staying open. From the repository root,
+the physical host can control the active stage with:
 
 ```bash
 tools/experiments/frame200_job_control.sh status
@@ -120,7 +121,9 @@ tools/experiments/frame200_job_control.sh log 100
 tools/experiments/frame200_job_control.sh stop
 ```
 
-`pause` sends `SIGSTOP` to the whole process group and creates a persistent
-pause marker; `resume` removes the marker and sends `SIGCONT`. `stop` requests
-a graceful `SIGTERM`. Runtime PID/log/control files live under ignored
-`.experiment_control/` and are not committed.
+`pause` sends `SIGSTOP` to every process in the service cgroup and creates a
+persistent pause marker; `resume` removes the marker and sends `SIGCONT`.
+`stop` requests a graceful service stop. `status` reports the persistent exit
+code after completion. Runtime PID/log/control files live under ignored
+`.experiment_control/` and are not committed. A detached process-group
+fallback remains available on hosts without a user systemd manager.
