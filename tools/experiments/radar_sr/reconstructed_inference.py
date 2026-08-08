@@ -2731,7 +2731,25 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      preserve_original_points: bool = False,
                      sr_min_rcs: Optional[float] = None,
                      sr_min_abs_v: Optional[float] = None,
-                     sr_empty_voxel_size: Optional[Tuple[float, float]] = None):
+                     sr_static_min_rcs: Optional[float] = None,
+                     sr_min_range: Optional[float] = None,
+                     sr_max_range: Optional[float] = None,
+                     sr_empty_voxel_size: Optional[Tuple[float, float]] = None,
+                     expand_dynamic_raw: bool = False,
+                     raw_expand_min_abs_v: float = 1.5,
+                     raw_expand_min_rcs: float = 10.0,
+                     raw_expand_max_range: float = 50.0,
+                     raw_expand_voxel_size: Tuple[float, float] = (0.25, 0.20),
+                     expand_dense_raw: bool = False,
+                     dense_expand_min_points: int = 8,
+                     dense_expand_min_rcs: float = 5.0,
+                     dense_expand_max_abs_v: float = 0.5,
+                     dense_expand_max_range: float = 50.0,
+                     dense_expand_adaptive_axis: bool = False,
+                     dense_expand_axis_radius: float = 3.0,
+                     dense_expand_min_axis_ratio: float = 1.0,
+                     dense_expand_keep_longitudinal: bool = False,
+                     dense_expand_require_adaptive_axis: bool = False):
     """
     处理单个PCD文件的超分辨率流程
 
@@ -2770,8 +2788,18 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                                   避免把原始bin重建坐标替换掉原始测量。
         sr_min_rcs: 仅保留RCS不低于该阈值的模型生成点；None表示不按RCS筛选。
         sr_min_abs_v: 仅保留绝对速度不低于该阈值的模型生成点；None表示不筛选。
+        sr_static_min_rcs: 与sr_min_abs_v组合为OR门控；低速点达到此RCS仍可保留。
+        sr_min_range/sr_max_range: 模型生成点的物理距离门控（米）。
         sr_empty_voxel_size: (x,y) 网格尺寸。设置后仅向原始点未占用的网格填充，
                              每个空网格只保留RCS最高的一个SR点。
+        expand_dynamic_raw: 将近距高RCS动态原始回波沿纵向扩展到相邻空网格。
+        raw_expand_*: 动态原始回波扩展的特征门控、距离和网格尺寸。
+        expand_dense_raw: 将近距慢速、同一检测网格内多回波的原始点沿纵向扩展。
+        dense_expand_*: 密集慢速回波的点数、RCS、速度和距离门控。
+        dense_expand_adaptive_axis: 使用邻近合格网格的PCA主轴选择纵向或横向扩展。
+        dense_expand_min_axis_ratio: 仅当PCA主/次特征值比达到阈值时改为横向扩展。
+        dense_expand_keep_longitudinal: 自适应横向扩展时同时保留原纵向邻格。
+        dense_expand_require_adaptive_axis: 丢弃未通过PCA横向门控的普通密集慢速种子。
     """
     # 1. 解析PCD文件
     metadata, data, header_lines = parse_pcd_file(input_path)
@@ -2937,6 +2965,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         n_duplicate = 0
         n_rcs_rejected = 0
         n_absv_rejected = 0
+        n_range_rejected = 0
         for point in valid_points:
             if int(point.get('is_sr', 1)) == 0:
                 continue
@@ -2948,8 +2977,17 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             if sr_min_rcs is not None and float(point.get('RCS', -np.inf)) < sr_min_rcs:
                 n_rcs_rejected += 1
                 continue
-            if sr_min_abs_v is not None and abs(float(point.get('AbsV', 0.0))) < sr_min_abs_v:
-                n_absv_rejected += 1
+            if sr_min_abs_v is not None:
+                is_dynamic = abs(float(point.get('AbsV', 0.0))) >= sr_min_abs_v
+                is_strong_static = (sr_static_min_rcs is not None and
+                                    float(point.get('RCS', -np.inf)) >= sr_static_min_rcs)
+                if not is_dynamic and not is_strong_static:
+                    n_absv_rejected += 1
+                    continue
+            point_range = float(point.get('SR_range', np.inf))
+            if ((sr_min_range is not None and point_range < sr_min_range) or
+                    (sr_max_range is not None and point_range >= sr_max_range)):
+                n_range_rejected += 1
                 continue
             sr_candidates.append(point)
 
@@ -3002,11 +3040,121 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                 'rcs_decay': 1.0, 'reuse_count': 1, 'reuse_db': 0.0,
                 'reuse_factor': 1.0, 'is_sr': 0,
             })
+
+        expanded_points = []
+        n_dynamic_expanded = 0
+        n_dense_expanded = 0
+        if expand_dynamic_raw or expand_dense_raw:
+            voxel_x, voxel_y = map(float, raw_expand_voxel_size)
+            if voxel_x <= 0 or voxel_y <= 0:
+                raise ValueError('raw_expand_voxel_size values must be positive')
+            raw_indices_by_voxel = {}
+            for i in range(len(data)):
+                raw_key = (math.floor(float(data['x'][i]) / voxel_x),
+                           math.floor(float(data['y'][i]) / voxel_y))
+                raw_indices_by_voxel.setdefault(raw_key, []).append(i)
+            raw_xy_voxels = set(raw_indices_by_voxel)
+            best_seed_by_target = {}
+
+            def _propose_offsets(source, seed_i, offsets):
+                for offset_x, offset_y in offsets:
+                    target = (source[0] + offset_x, source[1] + offset_y)
+                    if target in raw_xy_voxels:
+                        continue
+                    old_i = best_seed_by_target.get(target)
+                    if old_i is None or _raw_field('RCS', seed_i) > _raw_field('RCS', old_i):
+                        best_seed_by_target[target] = seed_i
+
+            if expand_dynamic_raw:
+                for i in range(len(data)):
+                    raw_range = _raw_field('range', i, np.linalg.norm([
+                        _raw_field('x', i), _raw_field('y', i), _raw_field('z', i)]))
+                    if (raw_range >= raw_expand_max_range or
+                            abs(_raw_field('AbsV', i)) < raw_expand_min_abs_v or
+                            _raw_field('RCS', i) < raw_expand_min_rcs):
+                        continue
+                    source = (math.floor(_raw_field('x', i) / voxel_x),
+                              math.floor(_raw_field('y', i) / voxel_y))
+                    _propose_offsets(source, i, ((-1, 0), (1, 0)))
+                n_dynamic_expanded = len(best_seed_by_target)
+
+            if expand_dense_raw:
+                if dense_expand_min_points < 1:
+                    raise ValueError('dense_expand_min_points must be at least 1')
+                if dense_expand_axis_radius <= 0:
+                    raise ValueError('dense_expand_axis_radius must be positive')
+                dense_seeds = []
+                for source, voxel_indices in raw_indices_by_voxel.items():
+                    if len(voxel_indices) < dense_expand_min_points:
+                        continue
+                    seed_i = max(voxel_indices, key=lambda idx: _raw_field('RCS', idx))
+                    raw_range = _raw_field('range', seed_i, np.linalg.norm([
+                        _raw_field('x', seed_i), _raw_field('y', seed_i),
+                        _raw_field('z', seed_i)]))
+                    if (raw_range >= dense_expand_max_range or
+                            _raw_field('RCS', seed_i) < dense_expand_min_rcs or
+                            abs(_raw_field('AbsV', seed_i)) >= dense_expand_max_abs_v):
+                        continue
+                    dense_seeds.append((source, seed_i))
+
+                dense_centers = np.asarray([
+                    ((source[0] + 0.5) * voxel_x, (source[1] + 0.5) * voxel_y)
+                    for source, _ in dense_seeds
+                ], dtype=np.float32)
+                for seed_index, (source, seed_i) in enumerate(dense_seeds):
+                    offsets = ((-1, 0), (1, 0))
+                    adaptive_lateral = False
+                    if dense_expand_adaptive_axis and len(dense_centers) >= 2:
+                        delta = dense_centers - dense_centers[seed_index]
+                        nearby = dense_centers[
+                            np.sum(delta * delta, axis=1) <= dense_expand_axis_radius ** 2
+                        ]
+                        if len(nearby) >= 2:
+                            centered = nearby - np.mean(nearby, axis=0, keepdims=True)
+                            covariance = centered.T @ centered / float(len(nearby))
+                            eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+                            major_axis = eigenvectors[:, -1]
+                            axis_ratio = float(eigenvalues[-1]) / max(float(eigenvalues[0]), 1e-9)
+                            if (axis_ratio >= dense_expand_min_axis_ratio and
+                                    abs(float(major_axis[1])) > abs(float(major_axis[0]))):
+                                adaptive_lateral = True
+                                if dense_expand_keep_longitudinal:
+                                    offsets = ((-1, 0), (1, 0), (0, -1), (0, 1))
+                                else:
+                                    offsets = ((0, -1), (0, 1))
+                    if dense_expand_require_adaptive_axis and not adaptive_lateral:
+                        continue
+                    _propose_offsets(source, seed_i, offsets)
+                n_dense_expanded = len(best_seed_by_target) - n_dynamic_expanded
+
+            for target, i in best_seed_by_target.items():
+                point = original_points[i].copy()
+                point['SR_x'] = (target[0] + 0.5) * voxel_x
+                point['SR_y'] = (target[1] + 0.5) * voxel_y
+                point['SR_range'] = float(math.sqrt(
+                    point['SR_x'] ** 2 + point['SR_y'] ** 2 + point['SR_z'] ** 2))
+                point['is_sr'] = 1
+                expanded_points.append(point)
+
+            # Merge learned-SR and deterministic support expansion without
+            # writing more than one generated point to the same detection cell.
+            best_generated = {}
+            for point in sr_kept + expanded_points:
+                key = (math.floor(float(point['SR_x']) / voxel_x),
+                       math.floor(float(point['SR_y']) / voxel_y))
+                old = best_generated.get(key)
+                if old is None or float(point['RCS']) > float(old['RCS']):
+                    best_generated[key] = point
+            sr_kept = list(best_generated.values())
         valid_points = original_points + sr_kept
         print(f"  保留原始点精确坐标: {len(original_points)}; 保留SR点: {len(sr_kept)}; "
               f"重合bin丢弃: {n_duplicate}; RCS阈值丢弃: {n_rcs_rejected}; "
               f"AbsV阈值丢弃: {n_absv_rejected}; 已占用voxel丢弃: {n_occupied_voxel}; "
+              f"距离门控丢弃: {n_range_rejected}; "
               f"voxel内去重: {n_voxel_dedup}; "
+              f"动态原始扩展候选: {n_dynamic_expanded}; "
+              f"密集慢速扩展新增候选: {n_dense_expanded}; "
+              f"原始扩展合计: {len(expanded_points)}; "
               f"最终: {len(valid_points)}")
 
     # 9. Occ真值评估（可选）
@@ -3222,9 +3370,36 @@ def main():
                         help='模型SR点的最小RCS；仅在preserve_original_points=True时生效。')
     parser.add_argument('--sr_min_abs_v', type=float, default=None,
                         help='模型SR点的最小|AbsV|；仅在preserve_original_points=True时生效。')
+    parser.add_argument('--sr_static_min_rcs', type=float, default=None,
+                        help='低速SR点达到此RCS时可绕过|AbsV|门控。')
+    parser.add_argument('--sr_min_range', type=float, default=None,
+                        help='模型SR点的最小物理距离（米）。')
+    parser.add_argument('--sr_max_range', type=float, default=None,
+                        help='模型SR点的最大物理距离（米，右开区间）。')
     parser.add_argument('--sr_empty_voxel_size', type=float, nargs=2, default=None,
                         metavar=('VOXEL_X', 'VOXEL_Y'),
                         help='仅填充原始点未占用的XY网格，每格保留最高RCS的SR点。')
+    parser.add_argument('--expand_dynamic_raw', type=_parse_bool_arg, default=False,
+                        help='将近距高RCS动态原始回波扩展到纵向相邻空网格。')
+    parser.add_argument('--raw_expand_min_abs_v', type=float, default=1.5)
+    parser.add_argument('--raw_expand_min_rcs', type=float, default=10.0)
+    parser.add_argument('--raw_expand_max_range', type=float, default=50.0)
+    parser.add_argument('--raw_expand_voxel_size', type=float, nargs=2,
+                        default=(0.25, 0.20), metavar=('VOXEL_X', 'VOXEL_Y'))
+    parser.add_argument('--expand_dense_raw', type=_parse_bool_arg, default=False,
+                        help='将近距慢速、同一检测网格内多回波的原始点纵向扩展。')
+    parser.add_argument('--dense_expand_min_points', type=int, default=8)
+    parser.add_argument('--dense_expand_min_rcs', type=float, default=5.0)
+    parser.add_argument('--dense_expand_max_abs_v', type=float, default=0.5)
+    parser.add_argument('--dense_expand_max_range', type=float, default=50.0)
+    parser.add_argument('--dense_expand_adaptive_axis', type=_parse_bool_arg, default=False,
+                        help='以邻近合格密集网格的PCA主轴选择纵向或横向扩展。')
+    parser.add_argument('--dense_expand_axis_radius', type=float, default=3.0)
+    parser.add_argument('--dense_expand_min_axis_ratio', type=float, default=1.0)
+    parser.add_argument('--dense_expand_keep_longitudinal', type=_parse_bool_arg, default=False,
+                        help='PCA选择横向扩展时，同时保留纵向邻格形成十字支持。')
+    parser.add_argument('--dense_expand_require_adaptive_axis', type=_parse_bool_arg, default=False,
+                        help='仅保留通过PCA横向门控的密集慢速种子。')
     args = parser.parse_args()
 
     # 同步动态点云AAI参数到全局变量（aai_frame3_dynamic_static内部读取）
@@ -3386,7 +3561,25 @@ def main():
                 preserve_original_points=args.preserve_original_points,
                 sr_min_rcs=args.sr_min_rcs,
                 sr_min_abs_v=args.sr_min_abs_v,
-                sr_empty_voxel_size=args.sr_empty_voxel_size
+                sr_static_min_rcs=args.sr_static_min_rcs,
+                sr_min_range=args.sr_min_range,
+                sr_max_range=args.sr_max_range,
+                sr_empty_voxel_size=args.sr_empty_voxel_size,
+                expand_dynamic_raw=args.expand_dynamic_raw,
+                raw_expand_min_abs_v=args.raw_expand_min_abs_v,
+                raw_expand_min_rcs=args.raw_expand_min_rcs,
+                raw_expand_max_range=args.raw_expand_max_range,
+                raw_expand_voxel_size=args.raw_expand_voxel_size,
+                expand_dense_raw=args.expand_dense_raw,
+                dense_expand_min_points=args.dense_expand_min_points,
+                dense_expand_min_rcs=args.dense_expand_min_rcs,
+                dense_expand_max_abs_v=args.dense_expand_max_abs_v,
+                dense_expand_max_range=args.dense_expand_max_range,
+                dense_expand_adaptive_axis=args.dense_expand_adaptive_axis,
+                dense_expand_axis_radius=args.dense_expand_axis_radius,
+                dense_expand_min_axis_ratio=args.dense_expand_min_axis_ratio,
+                dense_expand_keep_longitudinal=args.dense_expand_keep_longitudinal,
+                dense_expand_require_adaptive_axis=args.dense_expand_require_adaptive_axis
             )
         except Exception as e:
             print(f"\n处理错误 {pcd_file}: {e}")

@@ -57,7 +57,15 @@ the required comparison is now an absolute difference of at least `+0.050`
 | raw | n/a | `checkpoint_epoch_40.pth` | 0.194115 | 0.000000 | completed; baseline |
 | sr-0 | neighborhood filling, threshold 0.5, `add_offset=True` | `checkpoint_epoch_35.pth` | 0.042826 | -0.151289 | failed; replaced in place by sr-1 |
 | sr-1 | exact raw preservation, threshold 0.8, SR RCS ≥ 2 dB | `checkpoint_epoch_40.pth` | 0.036061 | -0.158054 | failed; ROI pillars diluted by generated points |
-| sr-2 | raw preservation + dynamic empty-voxel SR gate | pending | — | — | inference running |
+| sr-2 | raw preservation + dynamic empty-voxel SR gate | `checkpoint_epoch_38.pth` | 0.038440 | -0.155675 | failed; LargeVehicle/Cyclist AP regressed |
+| sr-3 | sr-2 + high-RCS low-speed empty-voxel points | `checkpoint_epoch_39.pth` | 0.034671 | -0.159444 | failed; static clutter increased |
+| sr-4 | sr-3 gate restricted to 0–50 m additions | `checkpoint_epoch_40.pth` | 0.061758 | -0.132357 | failed; best SR result so far |
+| sr-5 | sr-4 + dynamic raw-support longitudinal expansion | `checkpoint_epoch_37.pth` | 0.109287 | -0.084828 | failed; best enhanced run so far, Cyclist AP recovered to 0.217 |
+| sr-6 | dynamic + dense-slow raw support; learned candidates disabled | `checkpoint_epoch_39.pth` | 0.206328 | +0.012213 | improved over raw, but below required +0.050 |
+| sr-7 | sr-6 with PCA-oriented dense-slow expansion | `checkpoint_epoch_35.pth` | 0.209153 | +0.015038 | improved; both Cyclists recalled, ordinary vehicle AP regressed |
+| sr-8 | sr-7 PCA orientation gated by eigenvalue ratio ≥ 10 | `checkpoint_epoch_38.pth` | 0.058631 | -0.135484 | failed; small direction substitutions destabilized training |
+| sr-9 | sr-6 longitudinal support + selective PCA lateral additions | `checkpoint_epoch_40.pth` | 0.054984 | -0.139131 | failed; sr-7 remains best |
+| sr-10 | dynamic support + PCA-selected lateral dense support only | pending | — | — | overwrite/information rebuild/training pipeline pending |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).

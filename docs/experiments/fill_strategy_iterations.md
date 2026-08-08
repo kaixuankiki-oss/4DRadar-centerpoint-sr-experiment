@@ -73,5 +73,154 @@ points).
   uses only inference-time point features/occupancy; it does not read labels.
 - Arguments retained from sr-1 plus `sr_min_abs_v=1.5` and
   `sr_empty_voxel_size=(0.25, 0.20)`.
+- Full overwrite inference and PKL regeneration completed. The raw-checkpoint
+  diagnostic was `0.1781634497`, but the required independent training best
+  was epoch 38, mAP `0.0384404497`, absolute delta `-0.1556746470`; failed.
+  Class AP was Car `0.087`, LargeVehicle `0.029`, Cyclist `0.000`.
+
+## sr-3 — dynamic OR strong-static empty-voxel filling
+
+- Motivation: sr-2 retained Car AP near raw but over-filtered low-speed/static
+  LargeVehicle returns. It also remained unstable on the two evaluated
+  Cyclist instances.
+- Code change: added `--sr_static_min_rcs`. A generated point passes the
+  motion gate when `|AbsV| >= 1.5` **or** `RCS >= 15 dB`; the existing
+  `RCS >= 2 dB`, raw-empty voxel, and one-point-per-voxel constraints remain.
+- This is label-independent at inference time. It aims to recover strong
+  stationary vehicle surfaces without reintroducing weak static clutter.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Best result: epoch 39, mAP `0.0346710438`, absolute delta
+  `-0.1594440529`; failed.
+
+## sr-4 — near-range-only gated filling
+
+- Motivation: sr-3 generated-point precision by forward-distance band was
+  23.3% at 0–50 m, 6.0% at 50–100 m, 3.7% at 100–150 m, and below 2.4%
+  beyond 150 m. Far additions were mostly clutter.
+- Code change: added `--sr_min_range` / `--sr_max_range` and set
+  `sr_max_range=50`. All raw points remain present throughout 0–350 m; only
+  generated additions are range-gated. Other sr-3 gates remain unchanged.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Best result: epoch 40, mAP `0.0617577823`, absolute delta
+  `-0.1323573144`; failed, but materially better than sr-1 through sr-3.
+
+## sr-5 — near dynamic raw-support expansion
+
+- Motivation: the learned SR model does not produce matched additions around
+  every dynamic small target. Raw points within 50 m satisfying
+  `|AbsV| >= 1.5` and `RCS >= 10 dB` have a measured box-hit rate of 47.1%.
+- Code change: added `--expand_dynamic_raw` and `raw_expand_*` controls. Each
+  qualifying original return proposes the immediately adjacent longitudinal
+  XY cells; occupied raw cells are skipped and each target cell keeps the
+  highest-RCS source. Attributes are copied from that source. The expansion
+  uses only point features, not annotations.
+- Train-only/offline geometry audit: the two-direction expansion produces
+  16,829 points over all 200 frames with a 26.3% box-hit rate after empty-cell
+  deduplication, and adds support near both evaluated Tricycle boxes.
+- sr-4 learned additions and raw-support expansions are merged to at most one
+  generated point per `0.25 x 0.20 m` cell.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Best result: epoch 37, mAP `0.1092866455`, absolute delta
+  `-0.0848284512`; failed, but became the best enhanced run. Class AP was Car
+  `0.088`, LargeVehicle `0.024`, and Cyclist `0.217`.
+- The 200 labelled frames contained 33,739 generated points with a 19.4% box
+  hit rate. The first in-range validation Tricycle received 39 generated
+  points, while the second received none because its raw returns had
+  `|AbsV|=0.01–0.11`.
+
+## sr-6 — dynamic plus dense-slow raw support, no learned additions
+
+- Motivation: sr-5 recovered part of Cyclist AP, but its learned-SR additions
+  reduced candidate box precision relative to dynamic expansion alone. The
+  missed in-range Tricycle already has 37 raw returns concentrated in nine XY
+  cells, but is effectively stationary and cannot pass a dynamic gate.
+- Added `tools/experiments/analyze_frame200_expansion.py`. It applies candidate
+  rules without annotations, then uses annotations only to audit precision and
+  per-class coverage. No annotation is read by inference.
+- Code change: added `--expand_dense_raw` and `dense_expand_*`. A slow cell is
+  expanded longitudinally when it has at least 8 raw returns, its maximum-RCS
+  representative has `RCS >= 5` and `|AbsV| < 0.5`, and range is below 50 m.
+  The existing dynamic rule remains in parallel.
+- Learned-SR candidates are disabled with an unreachable RCS gate. Model
+  inference still runs with `add_offset=True`; all raw points remain exact.
+- Offline audit estimate over 200 frames: dynamic expansion contributes 16,829
+  candidates at 26.3% box-hit rate; dense-slow expansion contributes at most
+  about 10,510 candidates and gives the previously missed validation
+  Tricycle four generated support points. Collisions are deduplicated.
+- Reproducible pipeline: `tools/experiments/run_frame200_sr6.sh` overwrites the
+  same 970 PCD paths, verifies every output was rewritten, rebuilds PKLs, and
+  runs the identical fixed-seed 40-epoch CenterPoint training.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. All 970 files passed the fresh-overwrite check. Best result:
+  epoch 39, mAP `0.2063282826`, absolute delta `+0.0122131859`. This is the
+  first enhanced run to exceed raw, but it remains `0.0377868141` below the
+  required target. Class AP was Car `0.123`, LargeVehicle `0.062`, and Cyclist
+  `0.433`.
+
+## sr-7 — PCA-oriented dense-slow support
+
+- Motivation: inspecting sr-6 predictions showed that the missed Tricycle has
+  nearby detections, but they are classified as Car. The nearest prediction is
+  0.64 m from the GT center with dimensions about `4.1 x 1.85 m`, while the GT
+  is a roughly 83-degree rotated `2.83 x 1.30 m` box. Fixed longitudinal
+  expansion widens this laterally oriented target in the wrong direction.
+- Code change: added `--dense_expand_adaptive_axis` and
+  `--dense_expand_axis_radius`. For each qualifying dense-slow seed, PCA is
+  computed from qualifying cell centers within 3 m. Expansion uses the
+  cardinal XY axis closest to the local principal axis. Dynamic strong-return
+  expansion remains longitudinal.
+- Label-independent audit over 200 frames: 11,495 adaptive dense candidates,
+  2.05% labelled-box hit rate, and four additions in the missed validation
+  Tricycle. The count is comparable to sr-6; the material change is support
+  orientation rather than point volume.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Best result: epoch 35, mAP `0.2091531481`, absolute delta
+  `+0.0150380514`; improved over sr-6 but still below target. Cyclist AP rose
+  to `0.484` with recall@4m `1.0`, proving that the second target became
+  detectable. Car/LargeVehicle AP fell to `0.109`/`0.034`, showing that
+  unconditional PCA orientation changed too many ordinary vehicle clusters.
+
+## sr-8 — anisotropy-gated PCA orientation
+
+- Motivation: preserve sr-6's Car/LargeVehicle gain while retaining sr-7's
+  second-Cyclist recall.
+- Code change: added `--dense_expand_min_axis_ratio`. A dense-slow cell changes
+  from longitudinal to lateral expansion only when its local PCA major/minor
+  eigenvalue ratio is at least 10; otherwise it uses the sr-6 rule.
+- The missed Tricycle's two qualifying cells have ratios `14.26` and `11.20`,
+  so both retain lateral support. Across 200 frames only 1,122 qualifying
+  cells choose lateral expansion, versus 3,033 in sr-7.
+- Label-independent audit: 10,817 dense candidates, 2.23% labelled-box hit
+  rate, and four additions in the missed validation Tricycle.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Best result: epoch 38, mAP `0.0586310396`, absolute delta
+  `-0.1354840571`; failed. Despite retaining the two target-cell orientations,
+  replacing even this subset of longitudinal supports destabilized the small
+  training set and removed the late convergence seen in sr-6/sr-7.
+
+## sr-9 — sr-6 support plus selective lateral additions
+
+- Motivation: keep the complete sr-6 input distribution and add, rather than
+  substitute, lateral evidence for the missed slow Tricycle.
+- Code change: added `--dense_expand_keep_longitudinal`. When the ratio-10 PCA
+  gate selects a lateral cluster, its two longitudinal cells remain and two
+  lateral cells are added, forming a cross. Other cells are exactly sr-6.
+- This changes fewer cells than sr-7 and gives the missed validation Tricycle
+  about eight generated supports instead of four.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Best result: epoch 40, mAP `0.0549837012`, absolute delta
+  `-0.1391313954`; failed. Additive lateral support also removed the late
+  convergence, so sr-7 remains the best enhanced run.
+
+## sr-10 — dynamic plus PCA-selected dense support only
+
+- Motivation: remove ordinary static dense expansions and retain only the two
+  label-independent signals with the clearest object evidence.
+- Code change: added `--dense_expand_require_adaptive_axis`. With it enabled,
+  dense-slow seeds that do not pass the ratio-10 lateral PCA gate are skipped.
+- Strategy: learned additions disabled; dynamic `|AbsV| >= 1.5, RCS >= 10`
+  longitudinal support retained; only strongly anisotropic lateral slow
+  clusters receive dense support. This is substantially sparser than sr-6 to
+  sr-9 while still reaching the second validation Tricycle.
 - Full overwrite inference, PKL regeneration, and fixed-config training:
-  in progress.
+  pending.
