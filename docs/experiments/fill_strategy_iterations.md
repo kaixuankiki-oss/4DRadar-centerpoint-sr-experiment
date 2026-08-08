@@ -625,7 +625,7 @@ points).
   mAP `0.181259`, absolute delta `-0.0128560967` versus raw; failed. Dynamic
   voxel medians reduced LargeVehicle AP, so exact source features are restored.
 
-## sr-35 — positive dynamic support plus PCA dense support (running)
+## sr-35 — positive dynamic support plus PCA dense support
 
 - Motivation: combine sr-25's lower-clutter positive-only dynamic geometry
   with sr-7's PCA-oriented dense support. Positive dynamic targets have higher
@@ -634,5 +634,20 @@ points).
 - Only `dynamic_expand_direction=positive` changes from sr-7. Source features,
   dense PCA rules, learned-SR disablement, `add_offset=True`, split, seed,
   CenterPoint settings and range are unchanged.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 32,
+  mAP `0.140337`, absolute delta `-0.0537780967` versus raw; failed. The
+  combination reduced LargeVehicle and Cyclist AP.
+
+## sr-36 — half-scale local support grid (running)
+
+- Motivation: offline audit at a `0.125 x 0.10m` grid raises dynamic candidate
+  box-hit rate from 26.32% to 29.67% and increases in-box coverage. The
+  half-step targets remain close to measured returns and may reinforce pillar
+  features without widening objects as aggressively as the standard grid.
+- Change `raw_expand_voxel_size` from `0.25 x 0.20m` to `0.125 x 0.10m` and
+  scale `dense_expand_min_points` from 8 to 4 for the smaller cell area. Keep
+  sr-7 PCA orientation, exact source features, all gates, `add_offset=True`,
+  split/seed/config and label-independent inference unchanged.
 - The same 970 outputs will be overwritten and evaluated through the host
   controller.

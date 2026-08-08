@@ -90,7 +90,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-32 | sr-7 geometry with dynamic `|AbsV|>=2.5` gate | `checkpoint_epoch_36.pth` | 0.1733340 | -0.0207811 | failed; vehicle AP regressed |
 | sr-33 | sr-7 with PCA-lateral dense synthetic RCS × 1.25 only | `checkpoint_epoch_31.pth` | 0.0937090 | -0.1004061 | failed; lateral-only scaling destabilized optimization |
 | sr-34 | sr-7 geometry with dynamic voxel-median RCS/AbsV matching | `checkpoint_epoch_32.pth` | 0.1812590 | -0.0128561 | failed; LargeVehicle AP regressed |
-| sr-35 | positive-only dynamic support plus sr-7 PCA dense support | running | — | — | active; exact source features |
+| sr-35 | positive-only dynamic support plus sr-7 PCA dense support | `checkpoint_epoch_32.pth` | 0.1403370 | -0.0537781 | failed; LargeVehicle/Cyclist regressed |
+| sr-36 | sr-7 support on half-scale `0.125 x 0.10m` grid, dense min 4 | running | — | — | active; exact source features |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).
