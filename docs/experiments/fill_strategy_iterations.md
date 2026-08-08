@@ -770,7 +770,7 @@ points).
   AP were `0.074996/0.046519/0.000000`. Dense median height matching removed
   Cyclist convergence and is discarded.
 
-## sr-43 — exact sr-7 reproducibility audit (running)
+## sr-43 — exact sr-7 reproducibility audit
 
 - Motivation: many very small feature/geometry changes produce two distinct
   optimization regimes (roughly `0.04` and `0.19–0.21`). Before attributing
@@ -785,3 +785,26 @@ points).
   CenterPoint hyperparameters are unchanged.
 - Acceptance for this audit is reproduction of the sr-7 PCD inventory and a
   comparable measured mAP; it does not lower the final `0.244115` goal.
+- Full overwrite inference verified `970/970` fresh outputs. Fixed-seed
+  training selected epoch 35 with mAP `0.2091531481`, absolute delta
+  `+0.0150380514`; Car/LargeVehicle/Cyclist AP were exactly
+  `0.1091977907/0.0338995137/0.4843621399`, matching historical sr-7 to all
+  recorded digits. A second final evaluation of the persisted checkpoint
+  produced the same values. The sr-7 result is therefore reproducible; the
+  discontinuous results of nearby strategies are genuine input sensitivity,
+  not uncontrolled CUDA/spconv drift.
+
+## sr-44 — dynamic-only RCS attenuation on sr-7 geometry (running)
+
+- Motivation: prior provenance-strength tests leave one informative quadrant
+  unmeasured. sr-14 attenuated dynamic and dense support together to 0.5 and
+  reached `0.162134`; sr-16 kept dynamic at 1.0 but attenuated dense to 0.5
+  and collapsed to `0.041811`; sr-7 keeps both at 1.0 and reaches `0.209153`.
+  sr-44 keeps the dense/PCA support that recalls the stationary validation
+  Tricycle at full strength, while attenuating only dynamic synthetic RCS to
+  reduce moving clutter and duplicated velocity evidence.
+- Point locations, point counts, raw points, source z/AbsV, all gates and PCA
+  orientation are exact sr-7. Only `dynamic_expand_rcs_scale=0.5` changes;
+  `dense_expand_rcs_scale=1.0`, learned SR disabled, `add_offset=True`,
+  single-frame x/y/z/RCS/AbsV, 0–350m, split, seed and CenterPoint settings
+  remain fixed. Inference is annotation-independent.
