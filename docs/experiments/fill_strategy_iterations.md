@@ -564,7 +564,7 @@ points).
   statistics show that the median reduced dense RCS substantially, so the
   branch retained only a small gain over raw.
 
-## sr-31 — PCA dense support with voxel-quantile feature matching (running)
+## sr-31 — PCA dense support with voxel-quantile feature matching
 
 - Motivation: retain the robust AbsV median from sr-30 while restoring more
   of the dense return amplitude. The dense source voxel now supplies its RCS
@@ -575,5 +575,20 @@ points).
   `dense_expand_feature_quantile=0.75`. All geometry, gates, learned-SR
   disablement, `add_offset=True`, split, seed, CenterPoint settings and
   label-independent inference constraints remain unchanged.
-- The same 970 output paths will be overwritten and evaluated through the
-  host controller.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 38,
+  mAP `0.190676`, absolute delta `-0.0034390967` versus raw; failed. The
+  upper-quantile dense RCS did not recover the vehicle balance.
+
+## sr-32 — high-confidence dynamic gate with PCA dense support (running)
+
+- Motivation: offline audit gives the dynamic `|AbsV|>=2.5, RCS>=10` rule a
+  28.16% labelled-box hit rate, higher than sr-6's 26.32%, while preserving
+  33 generated supports in the first validation Cyclist. Use this as an
+  unlabeled precision gate; dense slow support remains the sr-7 PCA rule with
+  exact source features so the stationary Cyclist is not removed.
+- Only `raw_expand_min_abs_v` changes from sr-7 (`1.5 -> 2.5`). Learned SR is
+  disabled, raw points remain exact, `add_offset=True`, and all split/seed/
+  CenterPoint/range settings remain fixed.
+- The shared 970 PCD paths will be overwritten, PKLs rebuilt, and the fixed
+  40-epoch experiment run through the host controller.
