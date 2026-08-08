@@ -794,7 +794,7 @@ points).
   discontinuous results of nearby strategies are genuine input sensitivity,
   not uncontrolled CUDA/spconv drift.
 
-## sr-44 — dynamic-only RCS attenuation on sr-7 geometry (running)
+## sr-44 — dynamic-only RCS attenuation on sr-7 geometry
 
 - Motivation: prior provenance-strength tests leave one informative quadrant
   unmeasured. sr-14 attenuated dynamic and dense support together to 0.5 and
@@ -808,3 +808,22 @@ points).
   `dense_expand_rcs_scale=1.0`, learned SR disabled, `add_offset=True`,
   single-frame x/y/z/RCS/AbsV, 0–350m, split, seed and CenterPoint settings
   remain fixed. Inference is annotation-independent.
+- Full overwrite inference verified `970/970` fresh outputs, followed by PKL
+  rebuild and fixed-config training. Best checkpoint: epoch 36, mAP
+  `0.2159589141`, absolute delta `+0.0218438174`; this is the new enhanced
+  best but remains `0.0281561826` below the acceptance threshold. Overall
+  Car/LargeVehicle/Cyclist AP were
+  `0.0957911550/0.0152800318/0.5368055556`. Dynamic attenuation materially
+  improved Cyclist ranking but removed LargeVehicle evidence.
+
+## sr-45 — stronger dynamic-only RCS attenuation (running)
+
+- Motivation: sr-44 raised Cyclist AP by `0.052443` over sr-7 while leaving
+  dense/PCA support untouched, but lost `0.018619` LargeVehicle AP. Continue
+  the one-dimensional provenance sweep to determine whether the nonlinear
+  Cyclist ranking gain can exceed the vehicle loss and cross the target.
+- Exact sr-44/sr-7 occupancy, raw points, gates, PCA geometry, source z/AbsV,
+  learned-SR disablement and dense RCS scale 1.0 are retained. Only
+  `dynamic_expand_rcs_scale` changes `0.5 -> 0.25`; `add_offset=True`, fixed
+  single-frame features, range, split, seed and CenterPoint settings remain
+  unchanged.
