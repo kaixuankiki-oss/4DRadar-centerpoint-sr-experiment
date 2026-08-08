@@ -546,7 +546,7 @@ points).
   attenuation changed the learned balance even though only dense points were
   scaled, so this branch is discarded.
 
-## sr-30 — PCA dense support with voxel-median feature matching (running)
+## sr-30 — PCA dense support with voxel-median feature matching
 
 - Motivation: sr-29 shows that a global dense RCS scale is not a reliable
   feature match. For each dense slow source voxel, compute the median raw RCS
@@ -558,5 +558,22 @@ points).
   source mode for dynamic/other support). Learned SR remains disabled,
   `add_offset=True`, labels are not read by inference, and the split/seed/
   CenterPoint config/range are unchanged.
-- The same 970 output paths will be overwritten, PKLs rebuilt, and the fixed
-  40-epoch training/evaluation will be launched through the host controller.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 39,
+  mAP `0.199499`, absolute delta `+0.0053839033` versus raw; failed. Offline
+  statistics show that the median reduced dense RCS substantially, so the
+  branch retained only a small gain over raw.
+
+## sr-31 — PCA dense support with voxel-quantile feature matching (running)
+
+- Motivation: retain the robust AbsV median from sr-30 while restoring more
+  of the dense return amplitude. The dense source voxel now supplies its RCS
+  75th percentile and AbsV median; dynamic and strong-static supports still
+  copy the selected raw source point. This is an adaptive statistic, not a
+  fixed global scale.
+- New controls: `dense_expand_feature_mode=voxel_quantile` and
+  `dense_expand_feature_quantile=0.75`. All geometry, gates, learned-SR
+  disablement, `add_offset=True`, split, seed, CenterPoint settings and
+  label-independent inference constraints remain unchanged.
+- The same 970 output paths will be overwritten and evaluated through the
+  host controller.
