@@ -67,8 +67,11 @@ case "${action}" in
         printf '%q ' "$@" > "${COMMAND_FILE}"
         printf '\n' >> "${COMMAND_FILE}"
         : > "${LOG_FILE}"
-        setsid --wait "$@" >> "${LOG_FILE}" 2>&1 &
+        # Explicitly detach stdin and ignore SIGHUP so closing an SSH/terminal
+        # session cannot terminate the managed process group.
+        nohup setsid --wait "$@" </dev/null >> "${LOG_FILE}" 2>&1 &
         JOB_PID=$!
+        disown "${JOB_PID}" 2>/dev/null || true
         printf '%s\n' "${JOB_PID}" > "${PID_FILE}"
         sleep 0.2
         if ! is_alive; then
