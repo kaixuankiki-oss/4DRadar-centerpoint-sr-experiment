@@ -72,7 +72,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-14 | sr-7 geometry with synthetic-support RCS × 0.5 | `checkpoint_epoch_37.pth` | 0.162134 | -0.031981 | failed; lower synthetic RCS weakened vehicle evidence |
 | sr-15 | sr-7 geometry with synthetic-support RCS × 1.5 | `checkpoint_epoch_40.pth` | 0.038535 | -0.155580 | failed; amplified support removed Cyclist detections |
 | sr-16 | sr-7 geometry, dynamic RCS × 1.0 and dense RCS × 0.5 | `checkpoint_epoch_40.pth` | 0.041811 | -0.152304 | failed; provenance-aware scaling did not recover convergence |
-| sr-17 | sr-7 geometry with source-cell-relative synthetic coordinates | pending | — | — | running; same features and occupancy, different intra-voxel coordinates |
+| sr-17 | sr-7 geometry with source-cell-relative synthetic coordinates | `checkpoint_epoch_40.pth` | 0.046188 | -0.147927 | failed; intra-voxel offset copy did not preserve convergence |
+| sr-18 | sr-7 plus anisotropy-aware dynamic support | pending | — | — | running; strong-PCA dynamic orientation with longitudinal fallback |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).

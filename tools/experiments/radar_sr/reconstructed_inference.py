@@ -2743,6 +2743,10 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      raw_expand_rcs_scale: float = 1.0,
                      raw_expand_absv_scale: float = 1.0,
                      raw_expand_coordinate_mode: str = 'center',
+                     dynamic_expand_adaptive_axis: bool = False,
+                     dynamic_expand_axis_radius: float = 3.0,
+                     dynamic_expand_min_axis_ratio: float = 10.0,
+                     dynamic_expand_keep_longitudinal: bool = False,
                      dynamic_expand_rcs_scale: Optional[float] = None,
                      dense_expand_rcs_scale: Optional[float] = None,
                      expand_dense_raw: bool = False,
@@ -2810,6 +2814,9 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             密集慢速合成点的 RCS 缩放；None时继承raw_expand_rcs_scale。
         raw_expand_coordinate_mode: 合成点坐标使用目标网格中心，或复制源点
             在网格内的相对偏移（copy_offset）。
+        dynamic_expand_adaptive_axis: 对高置信动态种子使用局部PCA选择扩展方向。
+        dynamic_expand_axis_radius/dynamic_expand_min_axis_ratio: 动态PCA邻域半径
+            和各向异性门槛；不满足时回退纵向扩展。
         expand_dense_raw: 将近距慢速、同一检测网格内多回波的原始点沿纵向扩展。
         dense_expand_*: 密集慢速回波的点数、RCS、速度和距离门控。
         dense_expand_adaptive_axis: 使用邻近合格网格的PCA主轴选择纵向或横向扩展。
@@ -3087,6 +3094,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                         best_seed_by_target[target] = (seed_i, kind)
 
             if expand_dynamic_raw:
+                dynamic_seeds = []
                 for i in range(len(data)):
                     raw_range = _raw_field('range', i, np.linalg.norm([
                         _raw_field('x', i), _raw_field('y', i), _raw_field('z', i)]))
@@ -3096,7 +3104,31 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                         continue
                     source = (math.floor(_raw_field('x', i) / voxel_x),
                               math.floor(_raw_field('y', i) / voxel_y))
-                    _propose_offsets(source, i, ((-1, 0), (1, 0)), 'dynamic')
+                    dynamic_seeds.append((source, i))
+                dynamic_centers = np.asarray([
+                    ((source[0] + 0.5) * voxel_x, (source[1] + 0.5) * voxel_y)
+                    for source, _ in dynamic_seeds
+                ], dtype=np.float32)
+                if dynamic_expand_axis_radius <= 0 or dynamic_expand_min_axis_ratio <= 0:
+                    raise ValueError('dynamic PCA radius and ratio must be positive')
+                for seed_index, (source, seed_i) in enumerate(dynamic_seeds):
+                    offsets = ((-1, 0), (1, 0))
+                    if dynamic_expand_adaptive_axis and len(dynamic_centers) >= 2:
+                        delta = dynamic_centers - dynamic_centers[seed_index]
+                        nearby = dynamic_centers[
+                            np.sum(delta * delta, axis=1) <= dynamic_expand_axis_radius ** 2
+                        ]
+                        if len(nearby) >= 2:
+                            centered = nearby - np.mean(nearby, axis=0, keepdims=True)
+                            eigenvalues, eigenvectors = np.linalg.eigh(
+                                centered.T @ centered / float(len(nearby)))
+                            ratio = float(eigenvalues[-1]) / max(float(eigenvalues[0]), 1e-9)
+                            major_axis = eigenvectors[:, -1]
+                            if (ratio >= dynamic_expand_min_axis_ratio and
+                                    abs(float(major_axis[1])) > abs(float(major_axis[0]))):
+                                offsets = ((-1, 0), (1, 0), (0, -1), (0, 1)) \
+                                    if dynamic_expand_keep_longitudinal else ((0, -1), (0, 1))
+                    _propose_offsets(source, seed_i, offsets, 'dynamic')
                 n_dynamic_expanded = len(best_seed_by_target)
 
             if expand_dense_raw:
@@ -3487,6 +3519,12 @@ def main():
                         help='合成原始支持点的 AbsV 缩放')
     parser.add_argument('--raw_expand_coordinate_mode', choices=['center', 'copy_offset'],
                         default='center', help='合成点坐标的网格内位置策略')
+    parser.add_argument('--dynamic_expand_adaptive_axis', type=_parse_bool_arg, default=False,
+                        help='使用局部PCA选择高置信动态点的扩展方向')
+    parser.add_argument('--dynamic_expand_axis_radius', type=float, default=3.0)
+    parser.add_argument('--dynamic_expand_min_axis_ratio', type=float, default=10.0)
+    parser.add_argument('--dynamic_expand_keep_longitudinal', type=_parse_bool_arg, default=False,
+                        help='动态PCA横向扩展时同时保留纵向支持')
     parser.add_argument('--dynamic_expand_rcs_scale', type=float, default=None,
                         help='动态合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
     parser.add_argument('--dense_expand_rcs_scale', type=float, default=None,
@@ -3686,6 +3724,10 @@ def main():
                 raw_expand_rcs_scale=args.raw_expand_rcs_scale,
                 raw_expand_absv_scale=args.raw_expand_absv_scale,
                 raw_expand_coordinate_mode=args.raw_expand_coordinate_mode,
+                dynamic_expand_adaptive_axis=args.dynamic_expand_adaptive_axis,
+                dynamic_expand_axis_radius=args.dynamic_expand_axis_radius,
+                dynamic_expand_min_axis_ratio=args.dynamic_expand_min_axis_ratio,
+                dynamic_expand_keep_longitudinal=args.dynamic_expand_keep_longitudinal,
                 dynamic_expand_rcs_scale=args.dynamic_expand_rcs_scale,
                 dense_expand_rcs_scale=args.dense_expand_rcs_scale,
                 expand_dense_raw=args.expand_dense_raw,

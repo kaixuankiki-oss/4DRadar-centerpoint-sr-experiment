@@ -327,7 +327,7 @@ points).
   `-0.1523040444`; failed. Provenance-aware scaling did not recover the
   sr-7 convergence, despite leaving dynamic additions at full strength.
 
-## sr-17 — source-cell-relative coordinates (running)
+## sr-17 — source-cell-relative coordinates
 
 - Motivation: all RCS feature ablations changed convergence. sr-17 restores
   sr-7's exact gates and feature values, but replaces the synthetic point's
@@ -336,5 +336,20 @@ points).
   keeping occupancy and count unchanged.
 - Code change: added `raw_expand_coordinate_mode={center,copy_offset}`;
   raw points are untouched and the fill remains label-independent.
-- Status: full overwrite inference, PKL rebuild and fixed-config training are
-  running through the host controller.
+- Full overwrite inference, PKL rebuild, and fixed-config training completed.
+  Best result: epoch 40, mAP `0.0461883126`, absolute delta
+  `-0.1479267840`; failed. Copying intra-voxel offsets did not preserve the
+  late convergence, so sr-7's grid-center placement remains preferable.
+
+## sr-18 — anisotropy-aware dynamic support (running)
+
+- Motivation: sr-7 only orients dense slow cells. High-confidence dynamic raw
+  cells are still expanded along a fixed longitudinal axis, which can widen
+  cross-traffic vehicles in the wrong direction.
+- Planned code change: add a label-independent local-PCA option for dynamic
+  seeds, gated by a strong eigenvalue ratio (10) and falling back exactly to
+  sr-7's longitudinal offsets when the cluster is not strongly anisotropic.
+  Dynamic and dense feature values, point count, output root, split and
+  CenterPoint settings remain unchanged.
+- Status: implementation and full overwrite/PKL/training pipeline are being
+  prepared; sr-7's grid-center output remains the reference geometry.
