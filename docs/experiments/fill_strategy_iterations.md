@@ -750,7 +750,7 @@ points).
   Cyclist detections despite learned-only RCS attenuation, so learned SR is
   disabled again.
 
-## sr-42 — dense source-voxel median z matching (running)
+## sr-42 — dense source-voxel median z matching
 
 - Motivation: all prior deterministic feature tests copied the z of the
   highest-RCS seed, even for dense voxels containing at least eight raw
@@ -764,4 +764,24 @@ points).
 - sr-42 sets `dense_expand_z_mode=voxel_median` on exact sr-7 geometry/gates.
   Learned SR stays disabled; original points remain exact; `add_offset=True`,
   single-frame x/y/z/RCS/AbsV, 0–350m, split/seed/config remain fixed.
-- The shared 970 output paths will be overwritten before PKL rebuild/training.
+- Full overwrite inference verified `970/970` fresh outputs, followed by PKL
+  rebuild and fixed-config 40-epoch training. Best checkpoint: epoch 40, mAP
+  `0.040505`, absolute delta `-0.1536099465`; failed. Car/LargeVehicle/Cyclist
+  AP were `0.074996/0.046519/0.000000`. Dense median height matching removed
+  Cyclist convergence and is discarded.
+
+## sr-43 — exact sr-7 reproducibility audit (running)
+
+- Motivation: many very small feature/geometry changes produce two distinct
+  optimization regimes (roughly `0.04` and `0.19–0.21`). Before attributing
+  the difference solely to filling, regenerate the historical best sr-7 data
+  with the exact same label-independent rule and retrain under the unchanged
+  fixed-seed command. This tests whether the claimed `0.209153` improvement
+  is reproducible after in-place overwrite.
+- No fill parameter changes from sr-7: learned points are disabled; original
+  points are exact; dynamic source support and PCA-dense source features use
+  the original gates, grid-center coordinates and source z/RCS/AbsV.
+  `add_offset=True`, single-frame features, 0–350m range, 160/40 split and
+  CenterPoint hyperparameters are unchanged.
+- Acceptance for this audit is reproduction of the sr-7 PCD inventory and a
+  comparable measured mAP; it does not lower the final `0.244115` goal.
