@@ -95,7 +95,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-37 | sparse learned SR (`threshold=.995`, RCS≥2, range<50m) plus sr-7 support | `checkpoint_epoch_38.pth` | 0.046289 | -0.147826 | failed; learned points removed Cyclist detections |
 | sr-38 | sr-7 geometry with dense source-voxel mean RCS/AbsV matching | `checkpoint_epoch_40.pth` | 0.040986 | -0.153129 | failed; dense mean removed Cyclist detections |
 | sr-39 | sr-7 support with dense PCA anisotropy ratio ≥2 | `checkpoint_epoch_35.pth` | 0.190519 | -0.003596 | failed; Cyclist gain lost |
-| sr-40 | sr-7 support with dense PCA anisotropy ratio ≥1.25 | running | — | — | active; near-endpoint gate search |
+| sr-40 | sr-7 support with dense PCA anisotropy ratio ≥1.25 | `checkpoint_epoch_30.pth` | 0.190688 | -0.003427 | failed; Cyclist gain lost |
+| sr-41 | sparse learned SR with learned-only RCS ×0.25 plus sr-7 support | running | — | — | active; learned geometry/feature strength decoupled |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).

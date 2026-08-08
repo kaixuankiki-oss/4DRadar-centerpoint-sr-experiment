@@ -711,7 +711,7 @@ points).
   `0.100400/0.037824/0.433333`, so ratio 2 lost sr-7's Cyclist gain without
   recovering enough vehicle AP.
 
-## sr-40 — local PCA gate search at ratio 1.25 (running)
+## sr-40 — local PCA gate search at ratio 1.25
 
 - Motivation: the strongest endpoint is ratio 1 (sr-7, `0.209153`), while
   ratio 2 (sr-39, `0.190519`) restores the raw Cyclist AP and loses overall
@@ -722,5 +722,25 @@ points).
   source feature matching, all gates/coordinates, learned-SR disablement,
   `add_offset=True`, single-frame inputs, 0–350m range, split/seed and
   CenterPoint hyperparameters remain fixed. Inference is label-independent.
-- The same 970 `_SR.pcd` paths will be overwritten before PKL rebuild and
-  training.
+- Full overwrite inference verified `970/970` fresh outputs, followed by PKL
+  rebuild and fixed-config 40-epoch training. Best checkpoint: epoch 30, mAP
+  `0.190688`, absolute delta `-0.0034274513` versus raw; failed. Class AP was
+  Car `0.092654`, LargeVehicle `0.046076`, Cyclist `0.433333`. The near-ratio
+  gate still removed sr-7's Cyclist gain, so PCA threshold search is stopped.
+
+## sr-41 — attenuated high-confidence learned-SR feature matching (running)
+
+- Motivation: sr-26/sr-37 show that even high-confidence learned occupancy
+  destroys Cyclist convergence when learned points receive full interpolated
+  RCS. Preserve sr-37's sparse geometry, but attenuate only learned-point RCS
+  to `0.25`; deterministic sr-7 source features and all raw points remain
+  exact. This tests whether learned occupancy can contribute geometry without
+  dominating PointPillar max-pooled features.
+- Code change: add `learned_sr_rcs_scale` and `learned_sr_absv_scale` controls
+  applied after learned-point filtering and empty-voxel deduplication, before
+  merging deterministic support. Defaults are 1.0 for backward compatibility.
+- sr-41 uses threshold `.995`, learned matched RCS≥2, range<50m,
+  `learned_sr_rcs_scale=.25`, AbsV scale 1.0, plus exact sr-7 dynamic/PCA
+  support. Inference remains label-independent; `add_offset=True`, input
+  features, 0–350m range, split/seed/config are unchanged.
+- The same 970 output paths will be overwritten before PKL rebuild/training.

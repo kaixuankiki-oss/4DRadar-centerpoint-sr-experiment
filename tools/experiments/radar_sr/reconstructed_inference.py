@@ -2735,6 +2735,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      sr_min_range: Optional[float] = None,
                      sr_max_range: Optional[float] = None,
                      sr_empty_voxel_size: Optional[Tuple[float, float]] = None,
+                     learned_sr_rcs_scale: float = 1.0,
+                     learned_sr_absv_scale: float = 1.0,
                      expand_dynamic_raw: bool = False,
                      raw_expand_min_abs_v: float = 1.5,
                      raw_expand_min_rcs: float = 10.0,
@@ -2824,6 +2826,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         sr_min_range/sr_max_range: 模型生成点的物理距离门控（米）。
         sr_empty_voxel_size: (x,y) 网格尺寸。设置后仅向原始点未占用的网格填充，
                              每个空网格只保留RCS最高的一个SR点。
+        learned_sr_rcs_scale/learned_sr_absv_scale: 仅缩放通过全部门控后的
+            learned-SR 点特征；原始点与确定性 raw-support 点不受影响。
         expand_dynamic_raw: 将近距高RCS动态原始回波沿纵向扩展到相邻空网格。
         raw_expand_*: 动态原始回波扩展的特征门控、距离和网格尺寸。
         dynamic_expand_min_points: 动态源网格至少需要的原始回波数。
@@ -3083,6 +3087,12 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             sr_kept = list(best_by_voxel.values())
         else:
             sr_kept = sr_candidates
+
+        if learned_sr_rcs_scale < 0 or learned_sr_absv_scale < 0:
+            raise ValueError('learned SR feature scales must be non-negative')
+        for point in sr_kept:
+            point['RCS'] = float(point['RCS']) * float(learned_sr_rcs_scale)
+            point['AbsV'] = float(point['AbsV']) * float(learned_sr_absv_scale)
 
         def _raw_field(name, i, default=0.0):
             return float(data[name][i]) if name in data.dtype.names else float(default)
@@ -3696,6 +3706,10 @@ def main():
     parser.add_argument('--sr_empty_voxel_size', type=float, nargs=2, default=None,
                         metavar=('VOXEL_X', 'VOXEL_Y'),
                         help='仅填充原始点未占用的XY网格，每格保留最高RCS的SR点。')
+    parser.add_argument('--learned_sr_rcs_scale', type=float, default=1.0,
+                        help='通过门控后的 learned-SR 点 RCS 缩放；不影响原始/确定性支持点')
+    parser.add_argument('--learned_sr_absv_scale', type=float, default=1.0,
+                        help='通过门控后的 learned-SR 点 AbsV 缩放；不影响原始/确定性支持点')
     parser.add_argument('--expand_dynamic_raw', type=_parse_bool_arg, default=False,
                         help='将近距高RCS动态原始回波扩展到纵向相邻空网格。')
     parser.add_argument('--raw_expand_min_abs_v', type=float, default=1.5)
@@ -3942,6 +3956,8 @@ def main():
                 sr_min_range=args.sr_min_range,
                 sr_max_range=args.sr_max_range,
                 sr_empty_voxel_size=args.sr_empty_voxel_size,
+                learned_sr_rcs_scale=args.learned_sr_rcs_scale,
+                learned_sr_absv_scale=args.learned_sr_absv_scale,
                 expand_dynamic_raw=args.expand_dynamic_raw,
                 raw_expand_min_abs_v=args.raw_expand_min_abs_v,
                 raw_expand_min_rcs=args.raw_expand_min_rcs,
