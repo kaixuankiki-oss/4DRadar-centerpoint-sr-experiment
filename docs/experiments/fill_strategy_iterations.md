@@ -308,5 +308,19 @@ points).
   split, config and seed; only synthetic raw-support RCS changes to scale
   `1.5`. Raw `x,y,z,RCS,AbsV` values remain untouched and learned candidates
   remain disabled.
-- Status: full overwrite inference, PKL rebuild, and 40-epoch training are
-  running through the host controller.
+- Full overwrite inference, PKL rebuild, and fixed-config training completed.
+  Best result: epoch 40, mAP `0.0385348013`, absolute delta
+  `-0.1555802954`; failed. Amplifying support removed both Cyclist detections,
+  confirming that feature strength must be separated by support type.
+
+## sr-16 — dynamic/full-strength plus attenuated dense support (running)
+
+- Motivation: sr-14 attenuated both dynamic and dense points and reached
+  `0.162134`; sr-15 amplified both and collapsed to `0.038535`. sr-16 keeps
+  dynamic high-confidence support at RCS scale `1.0` and attenuates only the
+  low-speed dense support to `0.5`.
+- Code change: `best_seed_by_target` now retains the support provenance
+  (`dynamic` or `dense`), enabling separate feature scaling without changing
+  coordinates, occupancy or point count. Raw observations remain exact.
+- Status: the full overwrite/PKL rebuild/40-epoch run is ready to launch via
+  the host controller after the sr-16 commit is pushed.

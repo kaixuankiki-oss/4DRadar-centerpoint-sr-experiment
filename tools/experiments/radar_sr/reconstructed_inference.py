@@ -2742,6 +2742,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      raw_expand_voxel_size: Tuple[float, float] = (0.25, 0.20),
                      raw_expand_rcs_scale: float = 1.0,
                      raw_expand_absv_scale: float = 1.0,
+                     dynamic_expand_rcs_scale: Optional[float] = None,
+                     dense_expand_rcs_scale: Optional[float] = None,
                      expand_dense_raw: bool = False,
                      dense_expand_min_points: int = 8,
                      dense_expand_min_rcs: float = 5.0,
@@ -2803,6 +2805,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         raw_expand_*: 动态原始回波扩展的特征门控、距离和网格尺寸。
         raw_expand_rcs_scale/raw_expand_absv_scale: 合成原始支持点的 RCS/AbsV
             缩放；原始测量点保持精确不变。
+        dynamic_expand_rcs_scale/dense_expand_rcs_scale: 可分别覆盖动态和
+            密集慢速合成点的 RCS 缩放；None时继承raw_expand_rcs_scale。
         expand_dense_raw: 将近距慢速、同一检测网格内多回波的原始点沿纵向扩展。
         dense_expand_*: 密集慢速回波的点数、RCS、速度和距离门控。
         dense_expand_adaptive_axis: 使用邻近合格网格的PCA主轴选择纵向或横向扩展。
@@ -3069,14 +3073,15 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             raw_xy_voxels = set(raw_indices_by_voxel)
             best_seed_by_target = {}
 
-            def _propose_offsets(source, seed_i, offsets):
+            def _propose_offsets(source, seed_i, offsets, kind):
                 for offset_x, offset_y in offsets:
                     target = (source[0] + offset_x, source[1] + offset_y)
                     if target in raw_xy_voxels:
                         continue
-                    old_i = best_seed_by_target.get(target)
+                    old = best_seed_by_target.get(target)
+                    old_i = None if old is None else old[0]
                     if old_i is None or _raw_field('RCS', seed_i) > _raw_field('RCS', old_i):
-                        best_seed_by_target[target] = seed_i
+                        best_seed_by_target[target] = (seed_i, kind)
 
             if expand_dynamic_raw:
                 for i in range(len(data)):
@@ -3088,7 +3093,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                         continue
                     source = (math.floor(_raw_field('x', i) / voxel_x),
                               math.floor(_raw_field('y', i) / voxel_y))
-                    _propose_offsets(source, i, ((-1, 0), (1, 0)))
+                    _propose_offsets(source, i, ((-1, 0), (1, 0)), 'dynamic')
                 n_dynamic_expanded = len(best_seed_by_target)
 
             if expand_dense_raw:
@@ -3147,7 +3152,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                                     offsets = tuple(offsets) + tuple(lateral_offsets)
                     if dense_expand_require_adaptive_axis and not adaptive_lateral:
                         continue
-                    _propose_offsets(source, seed_i, offsets)
+                    _propose_offsets(source, seed_i, offsets, 'dense')
                 n_dense_expanded = len(best_seed_by_target) - n_dynamic_expanded
 
                 if bridge_dense_raw and len(dense_centers) >= 2:
@@ -3187,21 +3192,27 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                             )
                             if target in raw_xy_voxels:
                                 continue
-                            old_i = best_seed_by_target.get(target)
+                            old = best_seed_by_target.get(target)
+                            old_i = None if old is None else old[0]
                             if (old_i is None or
                                     _raw_field('RCS', seed_i) > _raw_field('RCS', old_i)):
-                                best_seed_by_target[target] = seed_i
+                                best_seed_by_target[target] = (seed_i, 'dense')
                     n_bridge_expanded = len(best_seed_by_target) - before_bridge
 
-            if raw_expand_rcs_scale < 0 or raw_expand_absv_scale < 0:
+            dynamic_rcs_scale = (raw_expand_rcs_scale if dynamic_expand_rcs_scale is None
+                                 else dynamic_expand_rcs_scale)
+            dense_rcs_scale = (raw_expand_rcs_scale if dense_expand_rcs_scale is None
+                               else dense_expand_rcs_scale)
+            if (raw_expand_rcs_scale < 0 or raw_expand_absv_scale < 0 or
+                    dynamic_rcs_scale < 0 or dense_rcs_scale < 0):
                 raise ValueError('raw expansion feature scales must be non-negative')
-            for target, i in best_seed_by_target.items():
+            for target, (i, kind) in best_seed_by_target.items():
                 point = original_points[i].copy()
                 point['SR_x'] = (target[0] + 0.5) * voxel_x
                 point['SR_y'] = (target[1] + 0.5) * voxel_y
                 point['SR_range'] = float(math.sqrt(
                     point['SR_x'] ** 2 + point['SR_y'] ** 2 + point['SR_z'] ** 2))
-                point['RCS'] *= float(raw_expand_rcs_scale)
+                point['RCS'] *= float(dynamic_rcs_scale if kind == 'dynamic' else dense_rcs_scale)
                 point['AbsV'] *= float(raw_expand_absv_scale)
                 point['is_sr'] = 1
                 expanded_points.append(point)
@@ -3461,6 +3472,10 @@ def main():
                         help='合成原始支持点的 RCS 缩放')
     parser.add_argument('--raw_expand_absv_scale', type=float, default=1.0,
                         help='合成原始支持点的 AbsV 缩放')
+    parser.add_argument('--dynamic_expand_rcs_scale', type=float, default=None,
+                        help='动态合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
+    parser.add_argument('--dense_expand_rcs_scale', type=float, default=None,
+                        help='密集慢速合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
     parser.add_argument('--expand_dense_raw', type=_parse_bool_arg, default=False,
                         help='将近距慢速、同一检测网格内多回波的原始点纵向扩展。')
     parser.add_argument('--dense_expand_min_points', type=int, default=8)
@@ -3655,6 +3670,8 @@ def main():
                 raw_expand_voxel_size=args.raw_expand_voxel_size,
                 raw_expand_rcs_scale=args.raw_expand_rcs_scale,
                 raw_expand_absv_scale=args.raw_expand_absv_scale,
+                dynamic_expand_rcs_scale=args.dynamic_expand_rcs_scale,
+                dense_expand_rcs_scale=args.dense_expand_rcs_scale,
                 expand_dense_raw=args.expand_dense_raw,
                 dense_expand_min_points=args.dense_expand_min_points,
                 dense_expand_min_rcs=args.dense_expand_min_rcs,
