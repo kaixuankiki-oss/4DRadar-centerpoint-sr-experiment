@@ -370,7 +370,7 @@ points).
   `-0.1473380602`; failed. Even the 40–45m range gate changed enough dense
   cells to lose convergence, so the next test narrows by both range and RCS.
 
-## sr-20 — narrow RCS/range lateral correction (running)
+## sr-20 — narrow RCS/range lateral correction
 
 - Motivation: the missed stationary Tricycle's two PCA cells have ranges
   42.19/42.81m and representative RCS 10.21/7.18. sr-20 retains sr-6's
@@ -378,5 +378,20 @@ points).
   and representative RCS 5–12, minimizing unrelated orientation changes.
 - The gate uses only raw point count, RCS, AbsV, range and local occupancy; no
   annotations are read by inference.
-- Status: implementation and full overwrite/PKL/40-epoch training are being
-  prepared.
+- Full overwrite inference, PKL rebuild, and fixed-config training completed.
+  Best result: epoch 40, mAP `0.0467088749`, absolute delta
+  `-0.1474062218`; failed. Even the two-dimensional feature gate did not
+  retain sr-6 convergence, so orientation changes are abandoned.
+
+## sr-21 — higher-confidence dynamic support (running)
+
+- Motivation: retain sr-6's fixed longitudinal geometry and dense-slow support,
+  but remove lower-confidence dynamic expansions. The offline audit raises
+  dynamic candidate box-hit rate from 26.3% at `|AbsV|>=1.5` to 28.9% at
+  `|AbsV|>=3`, while the first validation Cyclist still receives 33 supports;
+  the stationary Cyclist remains supplied by dense-slow support.
+- Only `raw_expand_min_abs_v` changes from sr-6 (`1.5 -> 3.0`). All feature
+  values, coordinates, point count rules, split, seed and CenterPoint settings
+  are otherwise identical.
+- Status: full overwrite inference, PKL rebuild and 40-epoch training are
+  running through the host controller.
