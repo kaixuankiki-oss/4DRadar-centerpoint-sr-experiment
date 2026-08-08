@@ -470,4 +470,22 @@ points).
 - Offline audit: 9,199 dynamic candidates at 30.1% box-hit rate versus 16,829
   at 26.3% for the two-sided sr-6 rule; the first validation Cyclist retains
   22 supports, while dense-slow support remains unchanged.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 40,
+  mAP `0.2028953257`, absolute delta `+0.0087802290` versus raw; failed.
+  Positive-only support preserved both Cyclist detections and LargeVehicle AP,
+  but did not improve the Car AP obtained by sr-6.
+
+## sr-26 — sparse high-confidence learned SR additions (planned)
+
+- Motivation: the learned occupancy model can identify additional empty cells,
+  but the earlier learned-SR runs admitted thousands of low-quality points.
+  A single-frame diagnostic at `threshold=0.99`, matched `RCS>=2` and range
+  below 50m retained only 45 learned points (after empty-voxel and geometry
+  gates), making a sparse test possible.
+- Keep sr-6 deterministic dynamic/dense support and add only these learned
+  points. Set `threshold=0.99`, `sr_min_rcs=2`, omit the learned AbsV gate,
+  and keep `sr_max_range=50`; raw points, features, coordinates, split, seed
+  and CenterPoint settings remain unchanged. `add_offset=True` remains
+  explicit and inference does not read labels.
 - Status: pending implementation and full overwrite/training run.
