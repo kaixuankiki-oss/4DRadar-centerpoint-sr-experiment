@@ -611,7 +611,7 @@ points).
   mAP `0.093709`, absolute delta `-0.1004060967` versus raw; failed. Scaling
   only PCA-lateral supports still destabilized the small-data optimization.
 
-## sr-34 — sr-7 geometry with dynamic voxel-median feature matching (running)
+## sr-34 — sr-7 geometry with dynamic voxel-median feature matching
 
 - Motivation: sr-7 remains the strongest geometric branch. Dynamic source
   voxels have a much smaller max-to-median RCS gap than dense voxels, so replace
@@ -620,5 +620,19 @@ points).
 - New control: `raw_expand_feature_mode=voxel_median`; dense mode explicitly
   remains `source`. All gates, geometry, `add_offset=True`, label-independent
   inference, split, seed, CenterPoint settings and 0–350m range are fixed.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 32,
+  mAP `0.181259`, absolute delta `-0.0128560967` versus raw; failed. Dynamic
+  voxel medians reduced LargeVehicle AP, so exact source features are restored.
+
+## sr-35 — positive dynamic support plus PCA dense support (running)
+
+- Motivation: combine sr-25's lower-clutter positive-only dynamic geometry
+  with sr-7's PCA-oriented dense support. Positive dynamic targets have higher
+  offline box-hit precision than negative targets, while PCA dense support is
+  the only tested rule that raised Cyclist AP above the raw value.
+- Only `dynamic_expand_direction=positive` changes from sr-7. Source features,
+  dense PCA rules, learned-SR disablement, `add_offset=True`, split, seed,
+  CenterPoint settings and range are unchanged.
 - The same 970 outputs will be overwritten and evaluated through the host
   controller.
