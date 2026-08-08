@@ -580,7 +580,7 @@ points).
   mAP `0.190676`, absolute delta `-0.0034390967` versus raw; failed. The
   upper-quantile dense RCS did not recover the vehicle balance.
 
-## sr-32 — high-confidence dynamic gate with PCA dense support (running)
+## sr-32 — high-confidence dynamic gate with PCA dense support
 
 - Motivation: offline audit gives the dynamic `|AbsV|>=2.5, RCS>=10` rule a
   28.16% labelled-box hit rate, higher than sr-6's 26.32%, while preserving
@@ -590,5 +590,21 @@ points).
 - Only `raw_expand_min_abs_v` changes from sr-7 (`1.5 -> 2.5`). Learned SR is
   disabled, raw points remain exact, `add_offset=True`, and all split/seed/
   CenterPoint/range settings remain fixed.
-- The shared 970 PCD paths will be overwritten, PKLs rebuilt, and the fixed
-  40-epoch experiment run through the host controller.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 36,
+  mAP `0.173334`, absolute delta `-0.0207810967` versus raw; failed. Car and
+  LargeVehicle AP both regressed, so the stricter dynamic gate is discarded.
+
+## sr-33 — provenance-specific PCA-lateral RCS support (running)
+
+- Motivation: sr-7's main advantage is detecting both validation Cyclists,
+  but its Cyclist AP is still only 0.484. Separate PCA-lateral dense support
+  from ordinary dense support and apply a mild RCS factor only to that
+  provenance. Dynamic points and ordinary dense points retain exact source
+  features, avoiding the global scaling failure seen in sr-15.
+- New control: `dense_expand_adaptive_rcs_scale=1.25`; the implementation
+  tags PCA-lateral proposals as `dense_adaptive` and otherwise preserves the
+  established sr-7 behavior. No annotations enter inference, learned SR is
+  disabled, `add_offset=True`, and all A/B settings remain fixed.
+- The same 970 outputs will be overwritten and evaluated through the host
+  controller.

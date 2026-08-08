@@ -2755,6 +2755,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dynamic_expand_keep_longitudinal: bool = False,
                      dynamic_expand_rcs_scale: Optional[float] = None,
                      dense_expand_rcs_scale: Optional[float] = None,
+                     dense_expand_adaptive_rcs_scale: Optional[float] = None,
                      dense_expand_feature_mode: Optional[str] = None,
                      dense_expand_feature_quantile: Optional[float] = None,
                      expand_dense_raw: bool = False,
@@ -2838,6 +2839,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             范围为0到1；AbsV始终使用中位数以保持速度鲁棒性。
         dynamic_expand_rcs_scale/dense_expand_rcs_scale: 可分别覆盖动态和
             密集慢速合成点的 RCS 缩放；None时继承raw_expand_rcs_scale。
+        dense_expand_adaptive_rcs_scale: 可单独覆盖PCA横向密集支持点的RCS
+            缩放；None时继承dense_expand_rcs_scale。
         dense_expand_feature_mode: 可单独覆盖密集慢速支持点的特征来源；None时
             继承raw_expand_feature_mode。
         dense_expand_feature_quantile: 可单独覆盖密集慢速支持点的RCS分位数；
@@ -3287,7 +3290,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                                     offsets = tuple(offsets) + tuple(lateral_offsets)
                     if dense_expand_require_adaptive_axis and not adaptive_lateral:
                         continue
-                    _propose_offsets(source, seed_i, offsets, 'dense')
+                    proposal_kind = 'dense_adaptive' if adaptive_lateral else 'dense'
+                    _propose_offsets(source, seed_i, offsets, proposal_kind)
                 n_dense_expanded = len(best_seed_by_target) - n_dynamic_expanded
 
                 if bridge_dense_raw and len(dense_centers) >= 2:
@@ -3359,8 +3363,12 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                                  else dynamic_expand_rcs_scale)
             dense_rcs_scale = (raw_expand_rcs_scale if dense_expand_rcs_scale is None
                                else dense_expand_rcs_scale)
+            dense_adaptive_rcs_scale = (
+                dense_rcs_scale if dense_expand_adaptive_rcs_scale is None
+                else dense_expand_adaptive_rcs_scale)
             if (raw_expand_rcs_scale < 0 or raw_expand_absv_scale < 0 or
-                    dynamic_rcs_scale < 0 or dense_rcs_scale < 0):
+                    dynamic_rcs_scale < 0 or dense_rcs_scale < 0 or
+                    dense_adaptive_rcs_scale < 0):
                 raise ValueError('raw expansion feature scales must be non-negative')
             valid_feature_modes = ('source', 'voxel_median', 'voxel_mean', 'voxel_quantile')
             if not 0.0 <= raw_expand_feature_quantile <= 1.0:
@@ -3385,11 +3393,12 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                 no annotation or learned output participates in this step.
                 Non-finite statistics fall back to the selected source point.
                 """
+                is_dense_kind = kind in ('dense', 'dense_adaptive')
                 mode = (dense_expand_feature_mode
-                        if kind == 'dense' and dense_expand_feature_mode is not None
+                        if is_dense_kind and dense_expand_feature_mode is not None
                         else raw_expand_feature_mode)
                 quantile = (dense_expand_feature_quantile
-                            if kind == 'dense' and dense_expand_feature_quantile is not None
+                            if is_dense_kind and dense_expand_feature_quantile is not None
                             else raw_expand_feature_quantile)
                 seed_rcs = _raw_field('RCS', seed_i)
                 seed_absv = _raw_field('AbsV', seed_i)
@@ -3430,6 +3439,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     point['SR_x'] ** 2 + point['SR_y'] ** 2 + point['SR_z'] ** 2))
                 if kind == 'dynamic':
                     rcs_scale = dynamic_rcs_scale
+                elif kind == 'dense_adaptive':
+                    rcs_scale = dense_adaptive_rcs_scale
                 elif kind == 'dense':
                     rcs_scale = dense_rcs_scale
                 else:
@@ -3722,6 +3733,8 @@ def main():
                         help='动态合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
     parser.add_argument('--dense_expand_rcs_scale', type=float, default=None,
                         help='密集慢速合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
+    parser.add_argument('--dense_expand_adaptive_rcs_scale', type=float, default=None,
+                        help='PCA横向密集支持点的 RCS 缩放，默认继承 dense_expand_rcs_scale')
     parser.add_argument('--dense_expand_feature_mode',
                         choices=['source', 'voxel_median', 'voxel_mean', 'voxel_quantile'],
                         default=None,
@@ -3949,6 +3962,7 @@ def main():
                 dynamic_expand_keep_longitudinal=args.dynamic_expand_keep_longitudinal,
                 dynamic_expand_rcs_scale=args.dynamic_expand_rcs_scale,
                 dense_expand_rcs_scale=args.dense_expand_rcs_scale,
+                dense_expand_adaptive_rcs_scale=args.dense_expand_adaptive_rcs_scale,
                 dense_expand_feature_mode=args.dense_expand_feature_mode,
                 dense_expand_feature_quantile=args.dense_expand_feature_quantile,
                 expand_dense_raw=args.expand_dense_raw,
