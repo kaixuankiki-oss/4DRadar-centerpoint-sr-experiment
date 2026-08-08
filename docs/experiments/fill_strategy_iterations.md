@@ -639,7 +639,7 @@ points).
   mAP `0.140337`, absolute delta `-0.0537780967` versus raw; failed. The
   combination reduced LargeVehicle and Cyclist AP.
 
-## sr-36 — half-scale local support grid (running)
+## sr-36 — half-scale local support grid
 
 - Motivation: offline audit at a `0.125 x 0.10m` grid raises dynamic candidate
   box-hit rate from 26.32% to 29.67% and increases in-box coverage. The
@@ -649,5 +649,22 @@ points).
   scale `dense_expand_min_points` from 8 to 4 for the smaller cell area. Keep
   sr-7 PCA orientation, exact source features, all gates, `add_offset=True`,
   split/seed/config and label-independent inference unchanged.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 40,
+  mAP `0.029490`, absolute delta `-0.1646250967` versus raw; failed. The
+  smaller source grid produced too few dense supports and destabilized the
+  detector.
+
+## sr-37 — sparse high-confidence learned SR plus sr-7 support (running)
+
+- Motivation: deterministic raw support remains stable but cannot recover all
+  missing occupancy. Re-enable only very high-confidence learned points at
+  threshold `0.995`, matched RCS≥2 and range<50m, while retaining sr-7 dynamic
+  and PCA dense support. The higher threshold is intended to avoid the broad
+  learned-SR distribution that failed in sr-26.
+- Only learned occupancy filtering changes: `threshold=0.995`,
+  `sr_min_rcs=2`, no AbsV learned-point gate, `sr_max_range=50`; raw points,
+  deterministic features/geometry, `add_offset=True`, split, seed and
+  CenterPoint settings remain fixed. Inference remains label-independent.
 - The same 970 outputs will be overwritten and evaluated through the host
   controller.
