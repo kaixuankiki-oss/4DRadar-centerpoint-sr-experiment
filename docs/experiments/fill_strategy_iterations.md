@@ -728,7 +728,7 @@ points).
   Car `0.092654`, LargeVehicle `0.046076`, Cyclist `0.433333`. The near-ratio
   gate still removed sr-7's Cyclist gain, so PCA threshold search is stopped.
 
-## sr-41 — attenuated high-confidence learned-SR feature matching (running)
+## sr-41 — attenuated high-confidence learned-SR feature matching
 
 - Motivation: sr-26/sr-37 show that even high-confidence learned occupancy
   destroys Cyclist convergence when learned points receive full interpolated
@@ -743,4 +743,25 @@ points).
   `learned_sr_rcs_scale=.25`, AbsV scale 1.0, plus exact sr-7 dynamic/PCA
   support. Inference remains label-independent; `add_offset=True`, input
   features, 0–350m range, split/seed/config are unchanged.
-- The same 970 output paths will be overwritten before PKL rebuild/training.
+- Full overwrite inference verified `970/970` fresh outputs, followed by PKL
+  rebuild and fixed-config 40-epoch training. Best checkpoint: epoch 36, mAP
+  `0.039375`, absolute delta `-0.1547400007`; failed. Car/LargeVehicle/Cyclist
+  AP were `0.090771/0.027354/0.000000`. Learned geometry still removed all
+  Cyclist detections despite learned-only RCS attenuation, so learned SR is
+  disabled again.
+
+## sr-42 — dense source-voxel median z matching (running)
+
+- Motivation: all prior deterministic feature tests copied the z of the
+  highest-RCS seed, even for dense voxels containing at least eight raw
+  returns. That single height can be an outlier and is duplicated into an
+  adjacent pillar. Use the median raw z in the source voxel for dense and
+  PCA-dense synthetic support only; keep sr-7 x/y occupancy and source
+  RCS/AbsV unchanged.
+- Code change: add `dense_expand_z_mode={source,voxel_median,voxel_mean}`;
+  defaults preserve existing behavior. Values are computed only from raw
+  source-voxel points, without annotations or learned outputs.
+- sr-42 sets `dense_expand_z_mode=voxel_median` on exact sr-7 geometry/gates.
+  Learned SR stays disabled; original points remain exact; `add_offset=True`,
+  single-frame x/y/z/RCS/AbsV, 0–350m, split/seed/config remain fixed.
+- The shared 970 output paths will be overwritten before PKL rebuild/training.

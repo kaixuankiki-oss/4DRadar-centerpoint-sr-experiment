@@ -2760,6 +2760,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dense_expand_adaptive_rcs_scale: Optional[float] = None,
                      dense_expand_feature_mode: Optional[str] = None,
                      dense_expand_feature_quantile: Optional[float] = None,
+                     dense_expand_z_mode: str = 'source',
                      expand_dense_raw: bool = False,
                      dense_expand_min_points: int = 8,
                      dense_expand_min_rcs: float = 5.0,
@@ -2849,6 +2850,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             继承raw_expand_feature_mode。
         dense_expand_feature_quantile: 可单独覆盖密集慢速支持点的RCS分位数；
             None时继承raw_expand_feature_quantile。
+        dense_expand_z_mode: 密集慢速支持点的 z 匹配方式；``source`` 复制
+            最高RCS源点，``voxel_median``/``voxel_mean`` 使用源网格统计量。
         raw_expand_coordinate_mode: 合成点坐标使用目标网格中心，或复制源点
             在网格内的相对偏移（copy_offset）。
         dynamic_expand_adaptive_axis: 对高置信动态种子使用局部PCA选择扩展方向。
@@ -3393,6 +3396,9 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     dense_expand_feature_mode not in valid_feature_modes):
                 raise ValueError(
                     "dense_expand_feature_mode must be None, 'source', 'voxel_median', 'voxel_mean' or 'voxel_quantile'")
+            if dense_expand_z_mode not in ('source', 'voxel_median', 'voxel_mean'):
+                raise ValueError(
+                    "dense_expand_z_mode must be 'source', 'voxel_median' or 'voxel_mean'")
             if raw_expand_coordinate_mode not in ('center', 'copy_offset'):
                 raise ValueError("raw_expand_coordinate_mode must be 'center' or 'copy_offset'")
 
@@ -3433,6 +3439,21 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     absv = float(np.mean(absv_values)) if len(absv_values) else seed_absv
                 return rcs, absv
 
+            def _matched_expand_z(source_key, seed_i, kind):
+                """Match synthetic dense-support height from raw-only values."""
+                seed_z = _raw_field('z', seed_i)
+                if kind not in ('dense', 'dense_adaptive') or dense_expand_z_mode == 'source':
+                    return seed_z
+                source_indices = raw_indices_by_voxel.get(source_key, (seed_i,))
+                z_values = np.asarray(
+                    [_raw_field('z', index) for index in source_indices], dtype=np.float32)
+                z_values = z_values[np.isfinite(z_values)]
+                if not len(z_values):
+                    return seed_z
+                if dense_expand_z_mode == 'voxel_median':
+                    return float(np.median(z_values))
+                return float(np.mean(z_values))
+
             for target, (i, kind) in best_seed_by_target.items():
                 point = original_points[i].copy()
                 source_x = _raw_field('x', i)
@@ -3445,6 +3466,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                 else:
                     point['SR_x'] = (target[0] + 0.5) * voxel_x
                     point['SR_y'] = (target[1] + 0.5) * voxel_y
+                point['SR_z'] = _matched_expand_z(source_key, i, kind)
                 point['SR_range'] = float(math.sqrt(
                     point['SR_x'] ** 2 + point['SR_y'] ** 2 + point['SR_z'] ** 2))
                 if kind == 'dynamic':
@@ -3755,6 +3777,9 @@ def main():
                         help='密集慢速合成点的 RCS/AbsV 匹配模式，默认继承 raw_expand_feature_mode')
     parser.add_argument('--dense_expand_feature_quantile', type=float, default=None,
                         help='密集慢速 voxel_quantile 模式的 RCS 分位数（默认继承）')
+    parser.add_argument('--dense_expand_z_mode',
+                        choices=['source', 'voxel_median', 'voxel_mean'], default='source',
+                        help='密集慢速合成点 z 的匹配模式')
     parser.add_argument('--expand_dense_raw', type=_parse_bool_arg, default=False,
                         help='将近距慢速、同一检测网格内多回波的原始点纵向扩展。')
     parser.add_argument('--dense_expand_min_points', type=int, default=8)
@@ -3981,6 +4006,7 @@ def main():
                 dense_expand_adaptive_rcs_scale=args.dense_expand_adaptive_rcs_scale,
                 dense_expand_feature_mode=args.dense_expand_feature_mode,
                 dense_expand_feature_quantile=args.dense_expand_feature_quantile,
+                dense_expand_z_mode=args.dense_expand_z_mode,
                 expand_dense_raw=args.expand_dense_raw,
                 dense_expand_min_points=args.dense_expand_min_points,
                 dense_expand_min_rcs=args.dense_expand_min_rcs,
