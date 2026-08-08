@@ -82,7 +82,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-24 | sr-6 with adjacent dynamic-source requirement, min 1 raw point | `checkpoint_epoch_36.pth` | 0.037460 | -0.156655 | failed; neighbor gate still removed convergence |
 | sr-25 | sr-6 dynamic support with positive-only longitudinal expansion | `checkpoint_epoch_40.pth` | 0.202895 | +0.008780 | failed; direction gate retained Cyclist but no Car gain |
 | sr-26 | sr-6 support + learned SR points at threshold 0.99, RCS ≥ 2, range < 50m | `checkpoint_epoch_39.pth` | 0.054355 | -0.139760 | failed; sparse learned geometry destabilized training |
-| sr-27 | sr-6 support + high-RCS static raw expansion (RCS ≥ 25) | pending | — | — | planned; static vehicle-support test |
+| sr-27 | sr-6 support + high-RCS static raw expansion (RCS ≥ 25) | `checkpoint_epoch_37.pth` | 0.186979 | -0.007136 | failed; static additions reduced vehicle AP |
+| sr-28 | sr-6 support + ultra-high-RCS static raw expansion (RCS ≥ 30) | pending | — | — | planned; sparse high-precision Car support |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).

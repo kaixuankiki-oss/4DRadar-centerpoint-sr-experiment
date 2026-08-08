@@ -508,4 +508,19 @@ points).
   dynamic/dense rules, feature values, geometry, split, seed and CenterPoint
   settings remain unchanged; inference is label-independent with
   `add_offset=True`.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 37,
+  mAP `0.1869790351`, absolute delta `-0.0071360616` versus raw; failed.
+  Cyclist recall was preserved, but the RCS-25 additions reduced Car and
+  LargeVehicle AP relative to sr-6.
+
+## sr-28 — ultra-high-RCS static support (planned)
+
+- Motivation: sr-27's 688 estimated static additions were still enough to
+  disturb convergence. Raise the static threshold to 30 dB, where the offline
+  candidate inventory falls to about 237 points with a 44.7% labelled-box hit
+  rate (106 Car hits and no LargeVehicle/Cyclist hits).
+- Only `strong_static_min_rcs` changes from sr-27 (`25 -> 30`). All sr-6
+  dynamic/dense rules, point features, geometry, split, seed and CenterPoint
+  settings remain unchanged.
 - Status: pending implementation and full overwrite/training run.
