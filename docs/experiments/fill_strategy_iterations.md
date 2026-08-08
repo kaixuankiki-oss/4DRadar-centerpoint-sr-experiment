@@ -672,7 +672,7 @@ points).
   `-0.1478261867` versus raw; failed. Even the `.995` learned occupancy gate
   removed the Cyclist detections, so learned SR is disabled again.
 
-## sr-38 — sr-7 geometry with dense-voxel mean feature matching (running)
+## sr-38 — sr-7 geometry with dense-voxel mean feature matching
 
 - Motivation: sr-30's dense-voxel median matching under-attenuated the
   representative RCS and reached `0.199499`, while sr-31's p75/median mix did
@@ -686,5 +686,23 @@ points).
   exact, `add_offset=True`, single-frame x/y/z/RCS/AbsV, 0–350m range, split,
   seed and CenterPoint hyperparameters remain fixed. Inference is
   label-independent.
+- Full overwrite inference, PKL rebuild and fixed-config 40-epoch training
+  completed. The shared 970 `_SR.pcd` paths were overwritten in place. The
+  final best checkpoint was epoch 40 with mAP `0.040986`, absolute delta
+  `-0.1531290347` versus raw; failed. The dense mean weakened the learned
+  pillar evidence and removed Cyclist detections.
+
+## sr-39 — sr-7 support with intermediate PCA anisotropy gate (running)
+
+- Motivation: sr-7 switches dense-slow support to lateral expansion whenever
+  the local PCA major axis is lateral (`min_axis_ratio=1`), recovering both
+  validation Cyclists but lowering vehicle AP. The ratio-10 variant (sr-8)
+  was too restrictive and also failed to converge. This round tests the
+  intermediate, label-independent ratio `2`, retaining more longitudinal
+  vehicle support while still allowing clearly anisotropic lateral clusters.
+- Only `dense_expand_min_axis_ratio` changes from sr-7 (`1 -> 2`). Source
+  features, point coordinates, learned-SR disablement, `add_offset=True`,
+  single-frame features, 0–350m range, split/seed and CenterPoint settings
+  remain unchanged. Inference does not read labels.
 - The same 970 `_SR.pcd` paths will be overwritten before PKL rebuild and
   training.
