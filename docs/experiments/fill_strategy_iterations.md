@@ -655,7 +655,7 @@ points).
   smaller source grid produced too few dense supports and destabilized the
   detector.
 
-## sr-37 — sparse high-confidence learned SR plus sr-7 support (running)
+## sr-37 — sparse high-confidence learned SR plus sr-7 support
 
 - Motivation: deterministic raw support remains stable but cannot recover all
   missing occupancy. Re-enable only very high-confidence learned points at
@@ -666,5 +666,25 @@ points).
   `sr_min_rcs=2`, no AbsV learned-point gate, `sr_max_range=50`; raw points,
   deterministic features/geometry, `add_offset=True`, split, seed and
   CenterPoint settings remain fixed. Inference remains label-independent.
-- The same 970 outputs will be overwritten and evaluated through the host
-  controller.
+- Full overwrite inference, PKL rebuild and fixed-config 40-epoch training
+  completed. The shared 970 outputs were overwritten in place. The best
+  checkpoint was epoch 38 with mAP `0.046289`, absolute delta
+  `-0.1478261867` versus raw; failed. Even the `.995` learned occupancy gate
+  removed the Cyclist detections, so learned SR is disabled again.
+
+## sr-38 — sr-7 geometry with dense-voxel mean feature matching (running)
+
+- Motivation: sr-30's dense-voxel median matching under-attenuated the
+  representative RCS and reached `0.199499`, while sr-31's p75/median mix did
+  not recover the vehicle classes. This round keeps the strongest sr-7
+  geometry and dynamic source features, but assigns synthetic dense-slow
+  points the arithmetic mean RCS and AbsV of their raw source voxel. The mean
+  is a less aggressive estimator than the median for multi-return vehicle
+  cells while removing the single maximum-return bias.
+- Only `dense_expand_feature_mode=voxel_mean` changes from sr-7. Learned SR is
+  disabled (`threshold=0.8`, impossible learned RCS gate), raw points remain
+  exact, `add_offset=True`, single-frame x/y/z/RCS/AbsV, 0–350m range, split,
+  seed and CenterPoint hyperparameters remain fixed. Inference is
+  label-independent.
+- The same 970 `_SR.pcd` paths will be overwritten before PKL rebuild and
+  training.

@@ -92,7 +92,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-34 | sr-7 geometry with dynamic voxel-median RCS/AbsV matching | `checkpoint_epoch_32.pth` | 0.1812590 | -0.0128561 | failed; LargeVehicle AP regressed |
 | sr-35 | positive-only dynamic support plus sr-7 PCA dense support | `checkpoint_epoch_32.pth` | 0.1403370 | -0.0537781 | failed; LargeVehicle/Cyclist regressed |
 | sr-36 | sr-7 support on half-scale `0.125 x 0.10m` grid, dense min 4 | `checkpoint_epoch_40.pth` | 0.0294900 | -0.1646251 | failed; dense support became too sparse |
-| sr-37 | sparse learned SR (`threshold=.995`, RCS≥2, range<50m) plus sr-7 support | running | — | — | active; deterministic support unchanged |
+| sr-37 | sparse learned SR (`threshold=.995`, RCS≥2, range<50m) plus sr-7 support | `checkpoint_epoch_38.pth` | 0.046289 | -0.147826 | failed; learned points removed Cyclist detections |
+| sr-38 | sr-7 geometry with dense source-voxel mean RCS/AbsV matching | running | — | — | active; learned SR disabled |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).
