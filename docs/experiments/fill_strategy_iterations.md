@@ -835,7 +835,7 @@ points).
   is almost cancelled by loss of vehicle evidence, so the RCS-only sweep is
   stopped.
 
-## sr-46 — low dynamic RCS with stronger dynamic AbsV (running)
+## sr-46 — low dynamic RCS with stronger dynamic AbsV
 
 - Motivation: sr-45's low dynamic RCS improves Cyclist ranking but weakens
   both vehicle classes. Restore motion evidence through AbsV without raising
@@ -849,3 +849,24 @@ points).
   AbsV is scaled to 1.5. Learned SR stays disabled; `add_offset=True`, the
   five single-frame features, 0–350m, split, seed and CenterPoint settings
   remain fixed.
+- Full overwrite inference verified `970/970` fresh outputs and fixed-config
+  training completed. Best checkpoint: epoch 40, mAP `0.0355004034`, absolute
+  delta `-0.1586146933`; failed. Car/LargeVehicle/Cyclist AP were
+  `0.0911542260/0.0153469840/0.0000000000`. Dynamic AbsV amplification
+  removed Cyclist convergence, so provenance feature amplification is
+  rejected.
+
+## sr-47 — paired FP32 stability audit on sr-45 fill (running)
+
+- Motivation: sr-43 proves exact runs are reproducible, but tiny feature
+  changes still switch between high and collapsed regimes. AMP logs repeatedly
+  show non-finite gradient norms and loss-scale reductions. Before another
+  fill change, test whether full precision makes the raw/enhanced comparison
+  less sensitive and allows sr-45's improved Cyclist evidence to coexist with
+  vehicle evidence.
+- The shared PCD directory is regenerated with exact sr-45 rules: sr-7
+  occupancy/PCA geometry, dynamic RCS 0.25, all AbsV and dense RCS at 1.0,
+  learned SR disabled and `add_offset=True`. Then raw and enhanced CenterPoint
+  are both trained from scratch without `--use_amp`, using the same config,
+  40 epochs, seed, workers, split and five single-frame features. The only
+  difference within this pair is raw versus enhanced INFO_PATH.
