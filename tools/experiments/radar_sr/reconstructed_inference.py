@@ -2748,8 +2748,13 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dense_expand_adaptive_axis: bool = False,
                      dense_expand_axis_radius: float = 3.0,
                      dense_expand_min_axis_ratio: float = 1.0,
+                     dense_expand_lateral_steps: int = 1,
+                     dense_expand_lateral_min_ratio: float = 1.0,
                      dense_expand_keep_longitudinal: bool = False,
-                     dense_expand_require_adaptive_axis: bool = False):
+                     dense_expand_require_adaptive_axis: bool = False,
+                     bridge_dense_raw: bool = False,
+                     dense_bridge_max_gap: float = 1.5,
+                     dense_bridge_min_axis_ratio: float = 10.0):
     """
     处理单个PCD文件的超分辨率流程
 
@@ -2798,8 +2803,11 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         dense_expand_*: 密集慢速回波的点数、RCS、速度和距离门控。
         dense_expand_adaptive_axis: 使用邻近合格网格的PCA主轴选择纵向或横向扩展。
         dense_expand_min_axis_ratio: 仅当PCA主/次特征值比达到阈值时改为横向扩展。
+        dense_expand_lateral_steps: 横向扩展的半径（网格步数）。
+        dense_expand_lateral_min_ratio: 只有PCA各向异性达到该阈值时才使用额外横向步数。
         dense_expand_keep_longitudinal: 自适应横向扩展时同时保留原纵向邻格。
         dense_expand_require_adaptive_axis: 丢弃未通过PCA横向门控的普通密集慢速种子。
+        bridge_dense_raw: 在高各向异性横向慢速密集种子之间插值内部空网格。
     """
     # 1. 解析PCD文件
     metadata, data, header_lines = parse_pcd_file(input_path)
@@ -3044,6 +3052,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         expanded_points = []
         n_dynamic_expanded = 0
         n_dense_expanded = 0
+        n_bridge_expanded = 0
         if expand_dynamic_raw or expand_dense_raw:
             voxel_x, voxel_y = map(float, raw_expand_voxel_size)
             if voxel_x <= 0 or voxel_y <= 0:
@@ -3083,6 +3092,10 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     raise ValueError('dense_expand_min_points must be at least 1')
                 if dense_expand_axis_radius <= 0:
                     raise ValueError('dense_expand_axis_radius must be positive')
+                if dense_expand_lateral_steps < 1:
+                    raise ValueError('dense_expand_lateral_steps must be at least 1')
+                if dense_expand_lateral_min_ratio <= 0:
+                    raise ValueError('dense_expand_lateral_min_ratio must be positive')
                 dense_seeds = []
                 for source, voxel_indices in raw_indices_by_voxel.items():
                     if len(voxel_indices) < dense_expand_min_points:
@@ -3104,6 +3117,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                 for seed_index, (source, seed_i) in enumerate(dense_seeds):
                     offsets = ((-1, 0), (1, 0))
                     adaptive_lateral = False
+                    axis_ratio = 0.0
                     if dense_expand_adaptive_axis and len(dense_centers) >= 2:
                         delta = dense_centers - dense_centers[seed_index]
                         nearby = dense_centers[
@@ -3122,10 +3136,58 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                                     offsets = ((-1, 0), (1, 0), (0, -1), (0, 1))
                                 else:
                                     offsets = ((0, -1), (0, 1))
+                                if dense_expand_lateral_steps > 1 and axis_ratio >= dense_expand_lateral_min_ratio:
+                                    lateral_offsets = []
+                                    for step in range(1, int(dense_expand_lateral_steps) + 1):
+                                        lateral_offsets.extend(((0, -step), (0, step)))
+                                    offsets = tuple(offsets) + tuple(lateral_offsets)
                     if dense_expand_require_adaptive_axis and not adaptive_lateral:
                         continue
                     _propose_offsets(source, seed_i, offsets)
                 n_dense_expanded = len(best_seed_by_target) - n_dynamic_expanded
+
+                if bridge_dense_raw and len(dense_centers) >= 2:
+                    if dense_bridge_max_gap <= 0:
+                        raise ValueError('dense_bridge_max_gap must be positive')
+                    before_bridge = len(best_seed_by_target)
+                    for seed_index, (source, seed_i) in enumerate(dense_seeds):
+                        delta = dense_centers - dense_centers[seed_index]
+                        distances = np.sqrt(np.sum(delta * delta, axis=1))
+                        local = dense_centers[distances <= dense_expand_axis_radius]
+                        if len(local) < 2:
+                            continue
+                        centered = local - np.mean(local, axis=0, keepdims=True)
+                        eigenvalues, eigenvectors = np.linalg.eigh(
+                            centered.T @ centered / float(len(local)))
+                        ratio = float(eigenvalues[-1]) / max(float(eigenvalues[0]), 1e-9)
+                        major_axis = eigenvectors[:, -1]
+                        if (ratio < dense_bridge_min_axis_ratio or
+                                abs(float(major_axis[1])) <= abs(float(major_axis[0]))):
+                            continue
+                        neighbors = np.flatnonzero(
+                            (distances > 0) &
+                            (distances <= dense_bridge_max_gap) &
+                            (np.abs(delta[:, 1]) > np.abs(delta[:, 0]))
+                        )
+                        if len(neighbors) == 0:
+                            continue
+                        neighbor_index = int(neighbors[np.argmin(distances[neighbors])])
+                        neighbor_source = dense_seeds[neighbor_index][0]
+                        steps = max(abs(neighbor_source[0] - source[0]),
+                                    abs(neighbor_source[1] - source[1]))
+                        for step in range(1, steps):
+                            fraction = step / float(steps)
+                            target = (
+                                int(round(source[0] + fraction * (neighbor_source[0] - source[0]))),
+                                int(round(source[1] + fraction * (neighbor_source[1] - source[1]))),
+                            )
+                            if target in raw_xy_voxels:
+                                continue
+                            old_i = best_seed_by_target.get(target)
+                            if (old_i is None or
+                                    _raw_field('RCS', seed_i) > _raw_field('RCS', old_i)):
+                                best_seed_by_target[target] = seed_i
+                    n_bridge_expanded = len(best_seed_by_target) - before_bridge
 
             for target, i in best_seed_by_target.items():
                 point = original_points[i].copy()
@@ -3154,6 +3216,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
               f"voxel内去重: {n_voxel_dedup}; "
               f"动态原始扩展候选: {n_dynamic_expanded}; "
               f"密集慢速扩展新增候选: {n_dense_expanded}; "
+              f"密集簇内部桥接新增候选: {n_bridge_expanded}; "
               f"原始扩展合计: {len(expanded_points)}; "
               f"最终: {len(valid_points)}")
 
@@ -3396,10 +3459,18 @@ def main():
                         help='以邻近合格密集网格的PCA主轴选择纵向或横向扩展。')
     parser.add_argument('--dense_expand_axis_radius', type=float, default=3.0)
     parser.add_argument('--dense_expand_min_axis_ratio', type=float, default=1.0)
+    parser.add_argument('--dense_expand_lateral_steps', type=int, default=1,
+                        help='PCA横向密集簇扩展的最大网格步数')
+    parser.add_argument('--dense_expand_lateral_min_ratio', type=float, default=1.0,
+                        help='启用额外横向步数所需的PCA各向异性比')
     parser.add_argument('--dense_expand_keep_longitudinal', type=_parse_bool_arg, default=False,
                         help='PCA选择横向扩展时，同时保留纵向邻格形成十字支持。')
     parser.add_argument('--dense_expand_require_adaptive_axis', type=_parse_bool_arg, default=False,
                         help='仅保留通过PCA横向门控的密集慢速种子。')
+    parser.add_argument('--bridge_dense_raw', type=_parse_bool_arg, default=False,
+                        help='在高各向异性横向慢速密集种子之间填充内部空网格。')
+    parser.add_argument('--dense_bridge_max_gap', type=float, default=1.5)
+    parser.add_argument('--dense_bridge_min_axis_ratio', type=float, default=10.0)
     args = parser.parse_args()
 
     # 同步动态点云AAI参数到全局变量（aai_frame3_dynamic_static内部读取）
@@ -3578,8 +3649,13 @@ def main():
                 dense_expand_adaptive_axis=args.dense_expand_adaptive_axis,
                 dense_expand_axis_radius=args.dense_expand_axis_radius,
                 dense_expand_min_axis_ratio=args.dense_expand_min_axis_ratio,
+                dense_expand_lateral_steps=args.dense_expand_lateral_steps,
+                dense_expand_lateral_min_ratio=args.dense_expand_lateral_min_ratio,
                 dense_expand_keep_longitudinal=args.dense_expand_keep_longitudinal,
-                dense_expand_require_adaptive_axis=args.dense_expand_require_adaptive_axis
+                dense_expand_require_adaptive_axis=args.dense_expand_require_adaptive_axis,
+                bridge_dense_raw=args.bridge_dense_raw,
+                dense_bridge_max_gap=args.dense_bridge_max_gap,
+                dense_bridge_min_axis_ratio=args.dense_bridge_min_axis_ratio
             )
         except Exception as e:
             print(f"\n处理错误 {pcd_file}: {e}")

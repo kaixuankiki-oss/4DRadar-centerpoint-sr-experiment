@@ -222,5 +222,61 @@ points).
   longitudinal support retained; only strongly anisotropic lateral slow
   clusters receive dense support. This is substantially sparser than sr-6 to
   sr-9 while still reaching the second validation Tricycle.
-- Full overwrite inference, PKL regeneration, and fixed-config training:
-  pending.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Actual inventory was 18,893 generated points with 23.47% labelled
+  box-hit rate. Best result: epoch 40, mAP `0.1845533887`, absolute delta
+  `-0.0095617080`; failed. Both Cyclists were recalled, but Car/LargeVehicle AP
+  fell to `0.081`/`0.028`, confirming ordinary longitudinal dense support was
+  responsible for much of sr-6's vehicle gain.
+
+## sr-11 — sr-6 plus internal dense-cluster bridges
+
+- Motivation: retain sr-6 exactly for vehicle performance, then strengthen the
+  slow lateral Tricycle without expanding its outer footprint.
+- Code change: added `--bridge_dense_raw` and `dense_bridge_*`. For ratio-10
+  lateral dense-slow clusters, nearby qualifying seed cells (within 1.5 m) are
+  connected by discrete voxel interpolation; only raw-empty cells between
+  observed endpoints are filled.
+- Offline audit: 1,152 bridge candidates over 200 frames, including three
+  points inside the missed validation Tricycle and no labelled Car or
+  LargeVehicle boxes. This is intentionally a geometry-continuity operation,
+  not outward dilation.
+- sr-6 longitudinal dynamic/dense expansion remains unchanged and learned-SR
+  candidates remain disabled.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Best result: epoch 37, mAP `0.0552797885`, absolute delta
+  `-0.1388353082`; failed. Internal bridging did not preserve sr-6's late
+  convergence, so sr-7 remains the best enhanced run.
+
+## sr-12 — relaxed fixed-axis dense support
+
+- Motivation: run a direct support-strength ablation without another geometry
+  algorithm. sr-6's fixed longitudinal dense support produced the best vehicle
+  AP; increasing its coverage may also make the second slow Tricycle robust.
+- Parameters changed from sr-6 only: dense cell minimum 8 -> 6 points and
+  representative RCS minimum 5 -> 2. Adaptive orientation and bridging are
+  disabled; learned additions remain disabled.
+- Offline estimate: about 22,009 low-speed longitudinal candidates over 200
+  frames and roughly 11 additions inside the second validation Tricycle.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. Best result: epoch 38, mAP `0.0604159499`, absolute delta
+  `-0.1336991467`; failed. Relaxing the dense gate from 8/RCS5 to 6/RCS2 did
+  not recover the sr-6/sr-7 convergence.
+
+## sr-13 — conservative strong-lateral extension (running)
+
+- Motivation: retain sr-7's complete input distribution, which is currently
+  the best enhanced result, while adding only a small amount of support to
+  thin lateral targets. The previous sr-8/sr-9 tests changed or added lateral
+  support for every selected PCA cell and destabilized training.
+- Code change: added `dense_expand_lateral_steps` and
+  `dense_expand_lateral_min_ratio`. sr-13 keeps sr-7's thresholds and PCA
+  selection, but adds the second lateral voxel only when the local PCA ratio
+  is at least 10. Raw points, dynamic expansion, and all other hyperparameters
+  remain unchanged.
+- Data handling: inference overwrites the shared 970-file `_SR.pcd` set;
+  PKLs are rebuilt from those files before training. No labels are read by
+  the filling code.
+- Status: the full 40-epoch CenterPoint run is launched through
+  `frame200_job_control.sh`; its mAP and delta will be appended here after
+  completion.
