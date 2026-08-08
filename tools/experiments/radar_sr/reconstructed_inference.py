@@ -2740,6 +2740,9 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      raw_expand_min_rcs: float = 10.0,
                      raw_expand_max_range: float = 50.0,
                      raw_expand_voxel_size: Tuple[float, float] = (0.25, 0.20),
+                     dynamic_expand_min_points: int = 1,
+                     dynamic_expand_require_neighbor: bool = False,
+                     dynamic_expand_neighbor_radius: int = 1,
                      raw_expand_rcs_scale: float = 1.0,
                      raw_expand_absv_scale: float = 1.0,
                      raw_expand_coordinate_mode: str = 'center',
@@ -2812,6 +2815,9 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                              每个空网格只保留RCS最高的一个SR点。
         expand_dynamic_raw: 将近距高RCS动态原始回波沿纵向扩展到相邻空网格。
         raw_expand_*: 动态原始回波扩展的特征门控、距离和网格尺寸。
+        dynamic_expand_min_points: 动态源网格至少需要的原始回波数。
+        dynamic_expand_require_neighbor: 是否要求相邻动态源网格形成局部一致性。
+        dynamic_expand_neighbor_radius: 动态邻居搜索的 XY voxel 半径。
         raw_expand_rcs_scale/raw_expand_absv_scale: 合成原始支持点的 RCS/AbsV
             缩放；原始测量点保持精确不变。
         dynamic_expand_rcs_scale/dense_expand_rcs_scale: 可分别覆盖动态和
@@ -3101,7 +3107,12 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                         best_seed_by_target[target] = (seed_i, kind)
 
             if expand_dynamic_raw:
+                if dynamic_expand_min_points < 1:
+                    raise ValueError('dynamic_expand_min_points must be at least 1')
+                if dynamic_expand_neighbor_radius < 1:
+                    raise ValueError('dynamic_expand_neighbor_radius must be at least 1')
                 dynamic_seeds = []
+                dynamic_sources = set()
                 for i in range(len(data)):
                     raw_range = _raw_field('range', i, np.linalg.norm([
                         _raw_field('x', i), _raw_field('y', i), _raw_field('z', i)]))
@@ -3111,6 +3122,31 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                         continue
                     source = (math.floor(_raw_field('x', i) / voxel_x),
                               math.floor(_raw_field('y', i) / voxel_y))
+                    if len(raw_indices_by_voxel.get(source, ())) < dynamic_expand_min_points:
+                        continue
+                    dynamic_sources.add(source)
+                for i in range(len(data)):
+                    raw_range = _raw_field('range', i, np.linalg.norm([
+                        _raw_field('x', i), _raw_field('y', i), _raw_field('z', i)]))
+                    if (raw_range >= raw_expand_max_range or
+                            abs(_raw_field('AbsV', i)) < raw_expand_min_abs_v or
+                            _raw_field('RCS', i) < raw_expand_min_rcs):
+                        continue
+                    source = (math.floor(_raw_field('x', i) / voxel_x),
+                              math.floor(_raw_field('y', i) / voxel_y))
+                    if source not in dynamic_sources:
+                        continue
+                    if dynamic_expand_require_neighbor:
+                        has_neighbor = any(
+                            (source[0] + dx, source[1] + dy) in dynamic_sources
+                            for dx in range(-dynamic_expand_neighbor_radius,
+                                            dynamic_expand_neighbor_radius + 1)
+                            for dy in range(-dynamic_expand_neighbor_radius,
+                                            dynamic_expand_neighbor_radius + 1)
+                            if (dx != 0 or dy != 0)
+                        )
+                        if not has_neighbor:
+                            continue
                     dynamic_seeds.append((source, i))
                 dynamic_centers = np.asarray([
                     ((source[0] + 0.5) * voxel_x, (source[1] + 0.5) * voxel_y)
@@ -3548,6 +3584,12 @@ def main():
     parser.add_argument('--raw_expand_max_range', type=float, default=50.0)
     parser.add_argument('--raw_expand_voxel_size', type=float, nargs=2,
                         default=(0.25, 0.20), metavar=('VOXEL_X', 'VOXEL_Y'))
+    parser.add_argument('--dynamic_expand_min_points', type=int, default=1,
+                        help='动态源 voxel 的最小原始点数')
+    parser.add_argument('--dynamic_expand_require_neighbor', type=_parse_bool_arg, default=False,
+                        help='仅保留具有相邻动态源 voxel 的动态扩展')
+    parser.add_argument('--dynamic_expand_neighbor_radius', type=int, default=1,
+                        help='动态源邻居搜索半径（voxel）')
     parser.add_argument('--raw_expand_rcs_scale', type=float, default=1.0,
                         help='合成原始支持点的 RCS 缩放')
     parser.add_argument('--raw_expand_absv_scale', type=float, default=1.0,
@@ -3764,6 +3806,9 @@ def main():
                 raw_expand_min_rcs=args.raw_expand_min_rcs,
                 raw_expand_max_range=args.raw_expand_max_range,
                 raw_expand_voxel_size=args.raw_expand_voxel_size,
+                dynamic_expand_min_points=args.dynamic_expand_min_points,
+                dynamic_expand_require_neighbor=args.dynamic_expand_require_neighbor,
+                dynamic_expand_neighbor_radius=args.dynamic_expand_neighbor_radius,
                 raw_expand_rcs_scale=args.raw_expand_rcs_scale,
                 raw_expand_absv_scale=args.raw_expand_absv_scale,
                 raw_expand_coordinate_mode=args.raw_expand_coordinate_mode,

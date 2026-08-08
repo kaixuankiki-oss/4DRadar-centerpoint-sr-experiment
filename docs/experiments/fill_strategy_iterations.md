@@ -400,7 +400,7 @@ points).
   stricter dynamic gate removed useful support and did not preserve sr-6's
   convergence.
 
-## sr-22 — dense-support feature-strength ablation (planned)
+## sr-22 — dense-support feature-strength ablation
 
 - Motivation: sr-21 confirms that reducing dynamic candidate count alone is
   not enough. The next controlled test keeps sr-6 geometry and candidate
@@ -411,4 +411,26 @@ points).
   dynamic/dense geometry, learned-SR gates, split, seed and CenterPoint
   settings remain unchanged. Inference remains label-independent and uses
   `add_offset=True`.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 36,
+  mAP `0.0360394645`, absolute delta `-0.1580756322` versus raw; failed.
+  Scaling AbsV on both dynamic and dense synthetic points changed the input
+  distribution enough to remove both Cyclist detections.
+
+## sr-23 — locally consistent dynamic raw support (planned)
+
+- Motivation: offline, label-independent auditing shows that isolated high-
+  Doppler raw cells are much noisier than dynamic cells with local support.
+  Require each dynamic source voxel to contain at least two raw returns and
+  to have another qualifying dynamic source within one XY voxel. This keeps
+  the existing longitudinal expansion and all synthetic features unchanged,
+  while removing isolated clutter.
+- New controls: `dynamic_expand_min_points=2` and
+  `dynamic_expand_require_neighbor=True`; all sr-6 thresholds, dense-slow
+  support, coordinates, feature values, split, seed and CenterPoint settings
+  remain unchanged. Inference remains label-independent with `add_offset=True`.
+- Offline audit: 5,604 dynamic candidates at a 46.7% labelled-box hit rate,
+  versus 16,829 candidates at 26.3% for sr-6; the first validation Cyclist
+  retains 27 generated supports and the stationary Cyclist remains supplied
+  by dense-slow support.
 - Status: pending implementation and full overwrite/training run.
