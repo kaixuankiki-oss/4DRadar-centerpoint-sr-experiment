@@ -54,12 +54,32 @@ the required comparison is now an absolute difference of at least `+0.050`
 
 | run | fill strategy | checkpoint | mAP | absolute delta vs raw | status |
 |---|---|---|---:|---:|---|
-| raw | n/a | pending full training | — | — | GPU one-batch forward/backward passed |
-| sr-0 | neighborhood filling, threshold 0.5, `add_offset=True` | pending full training | — | — | GPU one-batch forward/backward passed |
+| raw | n/a | `checkpoint_epoch_40.pth` | 0.194115 | 0.000000 | completed; baseline |
+| sr-0 | neighborhood filling, threshold 0.5, `add_offset=True` | `checkpoint_epoch_35.pth` | 0.042826 | -0.151289 | failed; replaced in place by sr-1 |
+| sr-1 | exact raw preservation, threshold 0.8, SR RCS ≥ 2 dB | `checkpoint_epoch_40.pth` | 0.036061 | -0.158054 | failed; ROI pillars diluted by generated points |
+| sr-2 | raw preservation + dynamic empty-voxel SR gate | pending | — | — | inference running |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).
 The RTX 4070 Ti SUPER passed PyTorch CUDA and both raw/SR CenterPoint one-batch
-forward/backward tests on 2026-08-07.  Run the two full training commands above
-with identical options and append the actual evaluation output; the SR branch
-is accepted only when `enhanced_mAP - raw_mAP >= 0.050`.
+forward/backward tests on 2026-08-07.  The SR branch is accepted only when
+`enhanced_mAP - raw_mAP >= 0.050`.
+
+## Host-side job control
+
+Inference and training are launched in a detached process group so they
+survive an SSH disconnect. From the repository root, the physical host can
+control the active stage with:
+
+```bash
+tools/experiments/frame200_job_control.sh status
+tools/experiments/frame200_job_control.sh pause
+tools/experiments/frame200_job_control.sh resume
+tools/experiments/frame200_job_control.sh log 100
+tools/experiments/frame200_job_control.sh stop
+```
+
+`pause` sends `SIGSTOP` to the whole process group and creates a persistent
+pause marker; `resume` removes the marker and sends `SIGCONT`. `stop` requests
+a graceful `SIGTERM`. Runtime PID/log/control files live under ignored
+`.experiment_control/` and are not committed.

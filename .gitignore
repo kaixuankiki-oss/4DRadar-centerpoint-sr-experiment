@@ -8,11 +8,13 @@ venv/
 *.idea/
 *.so
 *.sh
+!tools/experiments/frame200_job_control.sh
 *.pth
 *.pkl
 *.zip
 *.bin
 output
+.experiment_control/
 version.py
 .codex/
 memory/
