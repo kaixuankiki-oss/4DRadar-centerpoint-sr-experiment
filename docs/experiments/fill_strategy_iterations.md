@@ -692,7 +692,7 @@ points).
   `-0.1531290347` versus raw; failed. The dense mean weakened the learned
   pillar evidence and removed Cyclist detections.
 
-## sr-39 — sr-7 support with intermediate PCA anisotropy gate (running)
+## sr-39 — sr-7 support with intermediate PCA anisotropy gate
 
 - Motivation: sr-7 switches dense-slow support to lateral expansion whenever
   the local PCA major axis is lateral (`min_axis_ratio=1`), recovering both
@@ -704,5 +704,23 @@ points).
   features, point coordinates, learned-SR disablement, `add_offset=True`,
   single-frame features, 0–350m range, split/seed and CenterPoint settings
   remain unchanged. Inference does not read labels.
+- Full overwrite inference, PKL rebuild and fixed-config 40-epoch training
+  completed. The 970 shared outputs were overwritten in place. Best
+  checkpoint: epoch 35, mAP `0.190519`, absolute delta `-0.0035960290`
+  versus raw; failed. Car/LargeVehicle/Cyclist AP were
+  `0.100400/0.037824/0.433333`, so ratio 2 lost sr-7's Cyclist gain without
+  recovering enough vehicle AP.
+
+## sr-40 — local PCA gate search at ratio 1.25 (running)
+
+- Motivation: the strongest endpoint is ratio 1 (sr-7, `0.209153`), while
+  ratio 2 (sr-39, `0.190519`) restores the raw Cyclist AP and loses overall
+  performance. Search near the successful endpoint with ratio `1.25` to
+  retain weakly anisotropic lateral support while reverting only nearly
+  isotropic dense clusters to longitudinal vehicle support.
+- Only `dense_expand_min_axis_ratio` changes from sr-7 (`1 -> 1.25`). Exact
+  source feature matching, all gates/coordinates, learned-SR disablement,
+  `add_offset=True`, single-frame inputs, 0–350m range, split/seed and
+  CenterPoint hyperparameters remain fixed. Inference is label-independent.
 - The same 970 `_SR.pcd` paths will be overwritten before PKL rebuild and
   training.
