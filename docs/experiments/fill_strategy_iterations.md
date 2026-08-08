@@ -816,7 +816,7 @@ points).
   `0.0957911550/0.0152800318/0.5368055556`. Dynamic attenuation materially
   improved Cyclist ranking but removed LargeVehicle evidence.
 
-## sr-45 — stronger dynamic-only RCS attenuation (running)
+## sr-45 — stronger dynamic-only RCS attenuation
 
 - Motivation: sr-44 raised Cyclist AP by `0.052443` over sr-7 while leaving
   dense/PCA support untouched, but lost `0.018619` LargeVehicle AP. Continue
@@ -827,3 +827,25 @@ points).
   `dynamic_expand_rcs_scale` changes `0.5 -> 0.25`; `add_offset=True`, fixed
   single-frame features, range, split, seed and CenterPoint settings remain
   unchanged.
+- Full overwrite inference verified `970/970` fresh outputs and fixed-config
+  training selected epoch 33. mAP is `0.2173401492`, absolute delta
+  `+0.0232250525`, a new best but still below the target. Overall
+  Car/LargeVehicle/Cyclist AP are
+  `0.0697698762/0.0030839046/0.5791666667`. The monotonic Cyclist improvement
+  is almost cancelled by loss of vehicle evidence, so the RCS-only sweep is
+  stopped.
+
+## sr-46 — low dynamic RCS with stronger dynamic AbsV (running)
+
+- Motivation: sr-45's low dynamic RCS improves Cyclist ranking but weakens
+  both vehicle classes. Restore motion evidence through AbsV without raising
+  the dynamic RCS that caused more Cyclist false-positive/ranking pressure.
+- Code change: add provenance-specific `dynamic_expand_absv_scale` and
+  `dense_expand_absv_scale`, both inheriting the old global scale by default.
+  This mirrors the existing RCS controls and preserves every historical
+  strategy unless explicitly enabled.
+- sr-46 retains exact sr-45/sr-7 point positions, count, raw points, gates,
+  PCA-dense RCS/AbsV at 1.0 and dynamic RCS at 0.25. Only dynamic synthetic
+  AbsV is scaled to 1.5. Learned SR stays disabled; `add_offset=True`, the
+  five single-frame features, 0–350m, split, seed and CenterPoint settings
+  remain fixed.

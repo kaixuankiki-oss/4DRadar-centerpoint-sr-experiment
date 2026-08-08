@@ -2756,7 +2756,9 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dynamic_expand_min_axis_ratio: float = 10.0,
                      dynamic_expand_keep_longitudinal: bool = False,
                      dynamic_expand_rcs_scale: Optional[float] = None,
+                     dynamic_expand_absv_scale: Optional[float] = None,
                      dense_expand_rcs_scale: Optional[float] = None,
+                     dense_expand_absv_scale: Optional[float] = None,
                      dense_expand_adaptive_rcs_scale: Optional[float] = None,
                      dense_expand_feature_mode: Optional[str] = None,
                      dense_expand_feature_quantile: Optional[float] = None,
@@ -3379,9 +3381,16 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             dense_adaptive_rcs_scale = (
                 dense_rcs_scale if dense_expand_adaptive_rcs_scale is None
                 else dense_expand_adaptive_rcs_scale)
+            dynamic_absv_scale = (raw_expand_absv_scale
+                                  if dynamic_expand_absv_scale is None
+                                  else dynamic_expand_absv_scale)
+            dense_absv_scale = (raw_expand_absv_scale
+                                if dense_expand_absv_scale is None
+                                else dense_expand_absv_scale)
             if (raw_expand_rcs_scale < 0 or raw_expand_absv_scale < 0 or
                     dynamic_rcs_scale < 0 or dense_rcs_scale < 0 or
-                    dense_adaptive_rcs_scale < 0):
+                    dense_adaptive_rcs_scale < 0 or dynamic_absv_scale < 0 or
+                    dense_absv_scale < 0):
                 raise ValueError('raw expansion feature scales must be non-negative')
             valid_feature_modes = ('source', 'voxel_median', 'voxel_mean', 'voxel_quantile')
             if not 0.0 <= raw_expand_feature_quantile <= 1.0:
@@ -3471,15 +3480,19 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     point['SR_x'] ** 2 + point['SR_y'] ** 2 + point['SR_z'] ** 2))
                 if kind == 'dynamic':
                     rcs_scale = dynamic_rcs_scale
+                    absv_scale = dynamic_absv_scale
                 elif kind == 'dense_adaptive':
                     rcs_scale = dense_adaptive_rcs_scale
+                    absv_scale = dense_absv_scale
                 elif kind == 'dense':
                     rcs_scale = dense_rcs_scale
+                    absv_scale = dense_absv_scale
                 else:
                     rcs_scale = raw_expand_rcs_scale
+                    absv_scale = raw_expand_absv_scale
                 matched_rcs, matched_absv = _matched_expand_features(source_key, i, kind)
                 point['RCS'] = matched_rcs * float(rcs_scale)
-                point['AbsV'] = matched_absv * float(raw_expand_absv_scale)
+                point['AbsV'] = matched_absv * float(absv_scale)
                 point['is_sr'] = 1
                 expanded_points.append(point)
 
@@ -3767,8 +3780,12 @@ def main():
                         help='动态PCA横向扩展时同时保留纵向支持')
     parser.add_argument('--dynamic_expand_rcs_scale', type=float, default=None,
                         help='动态合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
+    parser.add_argument('--dynamic_expand_absv_scale', type=float, default=None,
+                        help='动态合成支持点的 AbsV 缩放，默认继承 raw_expand_absv_scale')
     parser.add_argument('--dense_expand_rcs_scale', type=float, default=None,
                         help='密集慢速合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
+    parser.add_argument('--dense_expand_absv_scale', type=float, default=None,
+                        help='密集慢速合成支持点的 AbsV 缩放，默认继承 raw_expand_absv_scale')
     parser.add_argument('--dense_expand_adaptive_rcs_scale', type=float, default=None,
                         help='PCA横向密集支持点的 RCS 缩放，默认继承 dense_expand_rcs_scale')
     parser.add_argument('--dense_expand_feature_mode',
@@ -4002,7 +4019,9 @@ def main():
                 dynamic_expand_min_axis_ratio=args.dynamic_expand_min_axis_ratio,
                 dynamic_expand_keep_longitudinal=args.dynamic_expand_keep_longitudinal,
                 dynamic_expand_rcs_scale=args.dynamic_expand_rcs_scale,
+                dynamic_expand_absv_scale=args.dynamic_expand_absv_scale,
                 dense_expand_rcs_scale=args.dense_expand_rcs_scale,
+                dense_expand_absv_scale=args.dense_expand_absv_scale,
                 dense_expand_adaptive_rcs_scale=args.dense_expand_adaptive_rcs_scale,
                 dense_expand_feature_mode=args.dense_expand_feature_mode,
                 dense_expand_feature_quantile=args.dense_expand_feature_quantile,

@@ -100,7 +100,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-42 | sr-7 geometry with dense source-voxel median z matching | `checkpoint_epoch_40.pth` | 0.040505 | -0.153610 | failed; Cyclist convergence removed |
 | sr-43 | exact sr-7 fill regeneration and fixed-seed retraining | `checkpoint_epoch_35.pth` | 0.209153 | +0.015038 | reproducible; exactly matches sr-7, below target |
 | sr-44 | sr-7 geometry with dynamic-only synthetic RCS × 0.5 | `checkpoint_epoch_36.pth` | 0.215959 | +0.021844 | improved; new best, still below target |
-| sr-45 | sr-7 geometry with dynamic-only synthetic RCS × 0.25 | running | — | — | active; extend dynamic-strength sweep |
+| sr-45 | sr-7 geometry with dynamic-only synthetic RCS × 0.25 | `checkpoint_epoch_33.pth` | 0.217340 | +0.023225 | improved; new best, vehicle evidence weak |
+| sr-46 | sr-45 plus dynamic-only synthetic AbsV × 1.5 | running | — | — | active; restore motion evidence |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).
