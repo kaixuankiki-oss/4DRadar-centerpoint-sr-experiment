@@ -2742,6 +2742,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      raw_expand_voxel_size: Tuple[float, float] = (0.25, 0.20),
                      raw_expand_rcs_scale: float = 1.0,
                      raw_expand_absv_scale: float = 1.0,
+                     raw_expand_coordinate_mode: str = 'center',
                      dynamic_expand_rcs_scale: Optional[float] = None,
                      dense_expand_rcs_scale: Optional[float] = None,
                      expand_dense_raw: bool = False,
@@ -2807,6 +2808,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             缩放；原始测量点保持精确不变。
         dynamic_expand_rcs_scale/dense_expand_rcs_scale: 可分别覆盖动态和
             密集慢速合成点的 RCS 缩放；None时继承raw_expand_rcs_scale。
+        raw_expand_coordinate_mode: 合成点坐标使用目标网格中心，或复制源点
+            在网格内的相对偏移（copy_offset）。
         expand_dense_raw: 将近距慢速、同一检测网格内多回波的原始点沿纵向扩展。
         dense_expand_*: 密集慢速回波的点数、RCS、速度和距离门控。
         dense_expand_adaptive_axis: 使用邻近合格网格的PCA主轴选择纵向或横向扩展。
@@ -3206,10 +3209,20 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             if (raw_expand_rcs_scale < 0 or raw_expand_absv_scale < 0 or
                     dynamic_rcs_scale < 0 or dense_rcs_scale < 0):
                 raise ValueError('raw expansion feature scales must be non-negative')
+            if raw_expand_coordinate_mode not in ('center', 'copy_offset'):
+                raise ValueError("raw_expand_coordinate_mode must be 'center' or 'copy_offset'")
             for target, (i, kind) in best_seed_by_target.items():
                 point = original_points[i].copy()
-                point['SR_x'] = (target[0] + 0.5) * voxel_x
-                point['SR_y'] = (target[1] + 0.5) * voxel_y
+                if raw_expand_coordinate_mode == 'copy_offset':
+                    source_x = _raw_field('x', i)
+                    source_y = _raw_field('y', i)
+                    source_key = (math.floor(source_x / voxel_x),
+                                  math.floor(source_y / voxel_y))
+                    point['SR_x'] = source_x + (target[0] - source_key[0]) * voxel_x
+                    point['SR_y'] = source_y + (target[1] - source_key[1]) * voxel_y
+                else:
+                    point['SR_x'] = (target[0] + 0.5) * voxel_x
+                    point['SR_y'] = (target[1] + 0.5) * voxel_y
                 point['SR_range'] = float(math.sqrt(
                     point['SR_x'] ** 2 + point['SR_y'] ** 2 + point['SR_z'] ** 2))
                 point['RCS'] *= float(dynamic_rcs_scale if kind == 'dynamic' else dense_rcs_scale)
@@ -3472,6 +3485,8 @@ def main():
                         help='合成原始支持点的 RCS 缩放')
     parser.add_argument('--raw_expand_absv_scale', type=float, default=1.0,
                         help='合成原始支持点的 AbsV 缩放')
+    parser.add_argument('--raw_expand_coordinate_mode', choices=['center', 'copy_offset'],
+                        default='center', help='合成点坐标的网格内位置策略')
     parser.add_argument('--dynamic_expand_rcs_scale', type=float, default=None,
                         help='动态合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
     parser.add_argument('--dense_expand_rcs_scale', type=float, default=None,
@@ -3670,6 +3685,7 @@ def main():
                 raw_expand_voxel_size=args.raw_expand_voxel_size,
                 raw_expand_rcs_scale=args.raw_expand_rcs_scale,
                 raw_expand_absv_scale=args.raw_expand_absv_scale,
+                raw_expand_coordinate_mode=args.raw_expand_coordinate_mode,
                 dynamic_expand_rcs_scale=args.dynamic_expand_rcs_scale,
                 dense_expand_rcs_scale=args.dense_expand_rcs_scale,
                 expand_dense_raw=args.expand_dense_raw,

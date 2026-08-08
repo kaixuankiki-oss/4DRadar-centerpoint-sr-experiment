@@ -313,7 +313,7 @@ points).
   `-0.1555802954`; failed. Amplifying support removed both Cyclist detections,
   confirming that feature strength must be separated by support type.
 
-## sr-16 — dynamic/full-strength plus attenuated dense support (running)
+## sr-16 — dynamic/full-strength plus attenuated dense support
 
 - Motivation: sr-14 attenuated both dynamic and dense points and reached
   `0.162134`; sr-15 amplified both and collapsed to `0.038535`. sr-16 keeps
@@ -322,5 +322,19 @@ points).
 - Code change: `best_seed_by_target` now retains the support provenance
   (`dynamic` or `dense`), enabling separate feature scaling without changing
   coordinates, occupancy or point count. Raw observations remain exact.
-- Status: the full overwrite/PKL rebuild/40-epoch run is ready to launch via
-  the host controller after the sr-16 commit is pushed.
+- Full overwrite inference, PKL rebuild, and fixed-config training completed.
+  Best result: epoch 40, mAP `0.0418110522`, absolute delta
+  `-0.1523040444`; failed. Provenance-aware scaling did not recover the
+  sr-7 convergence, despite leaving dynamic additions at full strength.
+
+## sr-17 — source-cell-relative coordinates (running)
+
+- Motivation: all RCS feature ablations changed convergence. sr-17 restores
+  sr-7's exact gates and feature values, but replaces the synthetic point's
+  grid-center coordinate with the source raw point's intra-voxel offset copied
+  into the target cell. This preserves realistic within-pillar geometry while
+  keeping occupancy and count unchanged.
+- Code change: added `raw_expand_coordinate_mode={center,copy_offset}`;
+  raw points are untouched and the fill remains label-independent.
+- Status: full overwrite inference, PKL rebuild and fixed-config training are
+  running through the host controller.
