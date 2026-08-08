@@ -433,4 +433,22 @@ points).
   versus 16,829 candidates at 26.3% for sr-6; the first validation Cyclist
   retains 27 generated supports and the stationary Cyclist remains supplied
   by dense-slow support.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 40,
+  mAP `0.0469410521`, absolute delta `-0.1471740446` versus raw; failed.
+  The precision gain was outweighed by removing too much dynamic support;
+  both Cyclist detections disappeared despite the offline support audit.
+
+## sr-24 — adjacent dynamic support without source-density gate (planned)
+
+- Motivation: sr-23's combined two-point and neighbor gate was too sparse for
+  the detector to converge. Keep the higher-precision local-neighbor rule,
+  but restore isolated single-return source cells so the dynamic candidate
+  inventory is larger while still rejecting isolated clutter.
+- Only `dynamic_expand_min_points` changes from sr-23 (`2 -> 1`); the
+  adjacent-dynamic requirement, all dense-slow support, feature values,
+  geometry, split, seed and CenterPoint settings remain unchanged.
+- Offline audit estimates 7,128 dynamic candidates at 39.5% box-hit rate and
+  29 supports in the first validation Cyclist; stationary Cyclist support is
+  unchanged.
 - Status: pending implementation and full overwrite/training run.
