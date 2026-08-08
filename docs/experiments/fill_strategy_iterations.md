@@ -451,4 +451,23 @@ points).
 - Offline audit estimates 7,128 dynamic candidates at 39.5% box-hit rate and
   29 supports in the first validation Cyclist; stationary Cyclist support is
   unchanged.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 36,
+  mAP `0.0374597487`, absolute delta `-0.1566553480` versus raw; failed.
+  Neighbor consistency without the density gate still removed the late
+  convergence seen in sr-6.
+
+## sr-25 — positive-direction dynamic expansion (planned)
+
+- Motivation: the offline audit shows that the positive longitudinal neighbor
+  has higher labelled-box precision (`30.1%`) than the negative neighbor
+  (`25.0%`). Keep sr-6's full dynamic source inventory and dense-slow support,
+  but add only the positive-x target cell for each dynamic seed to reduce the
+  lower-precision half of the fill.
+- New control: `dynamic_expand_direction=positive`; no consistency gate is
+  enabled. All features, range/RCS/AbsV thresholds, dense support, split,
+  seed and CenterPoint settings remain unchanged.
+- Offline audit: 9,199 dynamic candidates at 30.1% box-hit rate versus 16,829
+  at 26.3% for the two-sided sr-6 rule; the first validation Cyclist retains
+  22 supports, while dense-slow support remains unchanged.
 - Status: pending implementation and full overwrite/training run.

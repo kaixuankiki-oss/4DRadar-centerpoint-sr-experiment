@@ -2743,6 +2743,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dynamic_expand_min_points: int = 1,
                      dynamic_expand_require_neighbor: bool = False,
                      dynamic_expand_neighbor_radius: int = 1,
+                     dynamic_expand_direction: str = 'both',
                      raw_expand_rcs_scale: float = 1.0,
                      raw_expand_absv_scale: float = 1.0,
                      raw_expand_coordinate_mode: str = 'center',
@@ -2818,6 +2819,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         dynamic_expand_min_points: 动态源网格至少需要的原始回波数。
         dynamic_expand_require_neighbor: 是否要求相邻动态源网格形成局部一致性。
         dynamic_expand_neighbor_radius: 动态邻居搜索的 XY voxel 半径。
+        dynamic_expand_direction: 动态扩展方向，``both``、``positive`` 或 ``negative``。
         raw_expand_rcs_scale/raw_expand_absv_scale: 合成原始支持点的 RCS/AbsV
             缩放；原始测量点保持精确不变。
         dynamic_expand_rcs_scale/dense_expand_rcs_scale: 可分别覆盖动态和
@@ -3111,6 +3113,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     raise ValueError('dynamic_expand_min_points must be at least 1')
                 if dynamic_expand_neighbor_radius < 1:
                     raise ValueError('dynamic_expand_neighbor_radius must be at least 1')
+                if dynamic_expand_direction not in ('both', 'positive', 'negative'):
+                    raise ValueError("dynamic_expand_direction must be 'both', 'positive' or 'negative'")
                 dynamic_seeds = []
                 dynamic_sources = set()
                 for i in range(len(data)):
@@ -3155,7 +3159,11 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                 if dynamic_expand_axis_radius <= 0 or dynamic_expand_min_axis_ratio <= 0:
                     raise ValueError('dynamic PCA radius and ratio must be positive')
                 for seed_index, (source, seed_i) in enumerate(dynamic_seeds):
-                    offsets = ((-1, 0), (1, 0))
+                    offsets = {
+                        'both': ((-1, 0), (1, 0)),
+                        'positive': ((1, 0),),
+                        'negative': ((-1, 0),),
+                    }[dynamic_expand_direction]
                     if dynamic_expand_adaptive_axis and len(dynamic_centers) >= 2:
                         delta = dynamic_centers - dynamic_centers[seed_index]
                         nearby = dynamic_centers[
@@ -3590,6 +3598,8 @@ def main():
                         help='仅保留具有相邻动态源 voxel 的动态扩展')
     parser.add_argument('--dynamic_expand_neighbor_radius', type=int, default=1,
                         help='动态源邻居搜索半径（voxel）')
+    parser.add_argument('--dynamic_expand_direction', choices=['both', 'positive', 'negative'],
+                        default='both', help='动态扩展的 longitudinal 方向')
     parser.add_argument('--raw_expand_rcs_scale', type=float, default=1.0,
                         help='合成原始支持点的 RCS 缩放')
     parser.add_argument('--raw_expand_absv_scale', type=float, default=1.0,
@@ -3809,6 +3819,7 @@ def main():
                 dynamic_expand_min_points=args.dynamic_expand_min_points,
                 dynamic_expand_require_neighbor=args.dynamic_expand_require_neighbor,
                 dynamic_expand_neighbor_radius=args.dynamic_expand_neighbor_radius,
+                dynamic_expand_direction=args.dynamic_expand_direction,
                 raw_expand_rcs_scale=args.raw_expand_rcs_scale,
                 raw_expand_absv_scale=args.raw_expand_absv_scale,
                 raw_expand_coordinate_mode=args.raw_expand_coordinate_mode,

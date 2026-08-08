@@ -79,7 +79,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-21 | sr-6 with dynamic raw-support gate `|AbsV|>=3.0` (dense support unchanged) | `checkpoint_epoch_34.pth` | 0.180762 | -0.013353 | failed; stricter dynamic gate removed useful support |
 | sr-22 | sr-6 geometry/gates with synthetic-support AbsV × 0.5 | `checkpoint_epoch_36.pth` | 0.036039 | -0.158076 | failed; global AbsV scaling removed Cyclist detections |
 | sr-23 | sr-6 with dynamic source min 2 raw points + adjacent dynamic source requirement | `checkpoint_epoch_40.pth` | 0.046941 | -0.147174 | failed; dynamic support became too sparse |
-| sr-24 | sr-6 with adjacent dynamic-source requirement, min 1 raw point | pending | — | — | planned; restore candidate inventory |
+| sr-24 | sr-6 with adjacent dynamic-source requirement, min 1 raw point | `checkpoint_epoch_36.pth` | 0.037460 | -0.156655 | failed; neighbor gate still removed convergence |
+| sr-25 | sr-6 dynamic support with positive-only longitudinal expansion | pending | — | — | planned; direction precision ablation |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).
