@@ -2769,6 +2769,11 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dense_expand_lateral_min_ratio: float = 1.0,
                      dense_expand_keep_longitudinal: bool = False,
                      dense_expand_require_adaptive_axis: bool = False,
+                     expand_strong_static_raw: bool = False,
+                     strong_static_min_points: int = 1,
+                     strong_static_min_rcs: float = 25.0,
+                     strong_static_max_abs_v: float = 0.5,
+                     strong_static_max_range: float = 50.0,
                      bridge_dense_raw: bool = False,
                      dense_bridge_max_gap: float = 1.5,
                      dense_bridge_min_axis_ratio: float = 10.0):
@@ -2840,6 +2845,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         dense_expand_adaptive_min_rcs/max_rcs: PCA方向切换的代表RCS门控。
         dense_expand_keep_longitudinal: 自适应横向扩展时同时保留原纵向邻格。
         dense_expand_require_adaptive_axis: 丢弃未通过PCA横向门控的普通密集慢速种子。
+        expand_strong_static_raw: 扩展近距高RCS低速原始源网格。
+        strong_static_*: 强静态源网格的点数、RCS、速度和距离门控。
         bridge_dense_raw: 在高各向异性横向慢速密集种子之间插值内部空网格。
     """
     # 1. 解析PCD文件
@@ -3086,7 +3093,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         n_dynamic_expanded = 0
         n_dense_expanded = 0
         n_bridge_expanded = 0
-        if expand_dynamic_raw or expand_dense_raw:
+        n_strong_static_expanded = 0
+        if expand_dynamic_raw or expand_dense_raw or expand_strong_static_raw:
             voxel_x, voxel_y = map(float, raw_expand_voxel_size)
             if voxel_x <= 0 or voxel_y <= 0:
                 raise ValueError('raw_expand_voxel_size values must be positive')
@@ -3313,6 +3321,27 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                                 best_seed_by_target[target] = (seed_i, 'dense')
                     n_bridge_expanded = len(best_seed_by_target) - before_bridge
 
+            if expand_strong_static_raw:
+                if strong_static_min_points < 1:
+                    raise ValueError('strong_static_min_points must be at least 1')
+                strong_seeds = []
+                for source, voxel_indices in raw_indices_by_voxel.items():
+                    if len(voxel_indices) < strong_static_min_points:
+                        continue
+                    seed_i = max(voxel_indices, key=lambda idx: _raw_field('RCS', idx))
+                    raw_range = _raw_field('range', seed_i, np.linalg.norm([
+                        _raw_field('x', seed_i), _raw_field('y', seed_i),
+                        _raw_field('z', seed_i)]))
+                    if (raw_range >= strong_static_max_range or
+                            _raw_field('RCS', seed_i) < strong_static_min_rcs or
+                            abs(_raw_field('AbsV', seed_i)) >= strong_static_max_abs_v):
+                        continue
+                    strong_seeds.append((source, seed_i))
+                before_strong = len(best_seed_by_target)
+                for source, seed_i in strong_seeds:
+                    _propose_offsets(source, seed_i, ((-1, 0), (1, 0)), 'strong_static')
+                n_strong_static_expanded = len(best_seed_by_target) - before_strong
+
             dynamic_rcs_scale = (raw_expand_rcs_scale if dynamic_expand_rcs_scale is None
                                  else dynamic_expand_rcs_scale)
             dense_rcs_scale = (raw_expand_rcs_scale if dense_expand_rcs_scale is None
@@ -3336,7 +3365,13 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     point['SR_y'] = (target[1] + 0.5) * voxel_y
                 point['SR_range'] = float(math.sqrt(
                     point['SR_x'] ** 2 + point['SR_y'] ** 2 + point['SR_z'] ** 2))
-                point['RCS'] *= float(dynamic_rcs_scale if kind == 'dynamic' else dense_rcs_scale)
+                if kind == 'dynamic':
+                    rcs_scale = dynamic_rcs_scale
+                elif kind == 'dense':
+                    rcs_scale = dense_rcs_scale
+                else:
+                    rcs_scale = raw_expand_rcs_scale
+                point['RCS'] *= float(rcs_scale)
                 point['AbsV'] *= float(raw_expand_absv_scale)
                 point['is_sr'] = 1
                 expanded_points.append(point)
@@ -3360,6 +3395,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
               f"动态原始扩展候选: {n_dynamic_expanded}; "
               f"密集慢速扩展新增候选: {n_dense_expanded}; "
               f"密集簇内部桥接新增候选: {n_bridge_expanded}; "
+              f"强静态扩展新增候选: {n_strong_static_expanded}; "
               f"原始扩展合计: {len(expanded_points)}; "
               f"最终: {len(valid_points)}")
 
@@ -3642,6 +3678,12 @@ def main():
                         help='PCA选择横向扩展时，同时保留纵向邻格形成十字支持。')
     parser.add_argument('--dense_expand_require_adaptive_axis', type=_parse_bool_arg, default=False,
                         help='仅保留通过PCA横向门控的密集慢速种子。')
+    parser.add_argument('--expand_strong_static_raw', type=_parse_bool_arg, default=False,
+                        help='扩展近距高RCS低速原始源网格。')
+    parser.add_argument('--strong_static_min_points', type=int, default=1)
+    parser.add_argument('--strong_static_min_rcs', type=float, default=25.0)
+    parser.add_argument('--strong_static_max_abs_v', type=float, default=0.5)
+    parser.add_argument('--strong_static_max_range', type=float, default=50.0)
     parser.add_argument('--bridge_dense_raw', type=_parse_bool_arg, default=False,
                         help='在高各向异性横向慢速密集种子之间填充内部空网格。')
     parser.add_argument('--dense_bridge_max_gap', type=float, default=1.5)
@@ -3845,6 +3887,11 @@ def main():
                 dense_expand_lateral_min_ratio=args.dense_expand_lateral_min_ratio,
                 dense_expand_keep_longitudinal=args.dense_expand_keep_longitudinal,
                 dense_expand_require_adaptive_axis=args.dense_expand_require_adaptive_axis,
+                expand_strong_static_raw=args.expand_strong_static_raw,
+                strong_static_min_points=args.strong_static_min_points,
+                strong_static_min_rcs=args.strong_static_min_rcs,
+                strong_static_max_abs_v=args.strong_static_max_abs_v,
+                strong_static_max_range=args.strong_static_max_range,
                 bridge_dense_raw=args.bridge_dense_raw,
                 dense_bridge_max_gap=args.dense_bridge_max_gap,
                 dense_bridge_min_axis_ratio=args.dense_bridge_min_axis_ratio

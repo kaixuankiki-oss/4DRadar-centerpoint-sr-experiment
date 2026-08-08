@@ -488,4 +488,24 @@ points).
   and keep `sr_max_range=50`; raw points, features, coordinates, split, seed
   and CenterPoint settings remain unchanged. `add_offset=True` remains
   explicit and inference does not read labels.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 39,
+  mAP `0.0543547741`, absolute delta `-0.1397603226` versus raw; failed.
+  Sparse learned geometry still destabilized the small-data training and
+  reduced all three useful class APs.
+
+## sr-27 — high-RCS static raw support (planned)
+
+- Motivation: offline auditing found a small, high-precision source of static
+  vehicle evidence that sr-6 does not use. Expanding only low-speed source
+  voxels with representative RCS ≥ 25 dB adds about 688 candidates at a
+  22.2% box-hit rate, including 149 Car box hits; RCS ≥ 30 yields 237
+  candidates at 44.7% hit rate. This targets Car AP without changing the
+  dynamic/dense support that preserves Cyclist recall.
+- New controls: `expand_strong_static_raw=True`,
+  `strong_static_min_rcs=25`, `strong_static_min_points=1`,
+  `strong_static_max_abs_v=0.5`, `strong_static_max_range=50`. All sr-6
+  dynamic/dense rules, feature values, geometry, split, seed and CenterPoint
+  settings remain unchanged; inference is label-independent with
+  `add_offset=True`.
 - Status: pending implementation and full overwrite/training run.
