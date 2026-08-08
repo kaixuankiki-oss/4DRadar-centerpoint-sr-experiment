@@ -595,7 +595,7 @@ points).
   mAP `0.173334`, absolute delta `-0.0207810967` versus raw; failed. Car and
   LargeVehicle AP both regressed, so the stricter dynamic gate is discarded.
 
-## sr-33 — provenance-specific PCA-lateral RCS support (running)
+## sr-33 — provenance-specific PCA-lateral RCS support
 
 - Motivation: sr-7's main advantage is detecting both validation Cyclists,
   but its Cyclist AP is still only 0.484. Separate PCA-lateral dense support
@@ -606,5 +606,19 @@ points).
   tags PCA-lateral proposals as `dense_adaptive` and otherwise preserves the
   established sr-7 behavior. No annotations enter inference, learned SR is
   disabled, `add_offset=True`, and all A/B settings remain fixed.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 31,
+  mAP `0.093709`, absolute delta `-0.1004060967` versus raw; failed. Scaling
+  only PCA-lateral supports still destabilized the small-data optimization.
+
+## sr-34 — sr-7 geometry with dynamic voxel-median feature matching (running)
+
+- Motivation: sr-7 remains the strongest geometric branch. Dynamic source
+  voxels have a much smaller max-to-median RCS gap than dense voxels, so replace
+  only dynamic synthetic RCS/AbsV with voxel medians while preserving the
+  dense-PCA source features that recover both Cyclists.
+- New control: `raw_expand_feature_mode=voxel_median`; dense mode explicitly
+  remains `source`. All gates, geometry, `add_offset=True`, label-independent
+  inference, split, seed, CenterPoint settings and 0–350m range are fixed.
 - The same 970 outputs will be overwritten and evaluated through the host
   controller.
