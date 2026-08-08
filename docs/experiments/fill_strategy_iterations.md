@@ -263,7 +263,7 @@ points).
   `-0.1336991467`; failed. Relaxing the dense gate from 8/RCS5 to 6/RCS2 did
   not recover the sr-6/sr-7 convergence.
 
-## sr-13 — conservative strong-lateral extension (running)
+## sr-13 — conservative strong-lateral extension
 
 - Motivation: retain sr-7's complete input distribution, which is currently
   the best enhanced result, while adding only a small amount of support to
@@ -277,6 +277,20 @@ points).
 - Data handling: inference overwrites the shared 970-file `_SR.pcd` set;
   PKLs are rebuilt from those files before training. No labels are read by
   the filling code.
-- Status: the full 40-epoch CenterPoint run is launched through
-  `frame200_job_control.sh`; its mAP and delta will be appended here after
-  completion.
+- Full overwrite inference, PKL regeneration, and fixed-config training
+  completed. The best checkpoint was epoch 31 with mAP `0.049283`, absolute
+  delta `-0.144832` versus raw; failed. Even the ratio-10-only second lateral
+  voxel altered enough pillar occupancy to destroy the late convergence, so
+  adding extra points to sr-7 is rejected.
+
+## sr-14 — RCS-attenuated sr-7 support (running)
+
+- Motivation: sr-13 showed that changing occupancy is especially harmful on
+  this 200-frame split. sr-14 keeps sr-7's point locations and count exactly,
+  and changes only the copied RCS value on synthetic raw-support points.
+- Code change: added `raw_expand_rcs_scale` and `raw_expand_absv_scale`.
+  The raw points are untouched; sr-14 uses RCS scale `0.5` and AbsV scale
+  `1.0` for dynamic and dense additions. Learned SR candidates remain gated
+  off, and `add_offset=True` remains explicit.
+- Status: full overwrite inference, PKL rebuild, and fixed-config training
+  are running through `frame200_job_control.sh`.

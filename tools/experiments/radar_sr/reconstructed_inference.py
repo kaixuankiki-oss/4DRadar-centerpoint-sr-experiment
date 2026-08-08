@@ -2740,6 +2740,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      raw_expand_min_rcs: float = 10.0,
                      raw_expand_max_range: float = 50.0,
                      raw_expand_voxel_size: Tuple[float, float] = (0.25, 0.20),
+                     raw_expand_rcs_scale: float = 1.0,
+                     raw_expand_absv_scale: float = 1.0,
                      expand_dense_raw: bool = False,
                      dense_expand_min_points: int = 8,
                      dense_expand_min_rcs: float = 5.0,
@@ -2799,6 +2801,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                              每个空网格只保留RCS最高的一个SR点。
         expand_dynamic_raw: 将近距高RCS动态原始回波沿纵向扩展到相邻空网格。
         raw_expand_*: 动态原始回波扩展的特征门控、距离和网格尺寸。
+        raw_expand_rcs_scale/raw_expand_absv_scale: 合成原始支持点的 RCS/AbsV
+            缩放；原始测量点保持精确不变。
         expand_dense_raw: 将近距慢速、同一检测网格内多回波的原始点沿纵向扩展。
         dense_expand_*: 密集慢速回波的点数、RCS、速度和距离门控。
         dense_expand_adaptive_axis: 使用邻近合格网格的PCA主轴选择纵向或横向扩展。
@@ -3189,12 +3193,16 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                                 best_seed_by_target[target] = seed_i
                     n_bridge_expanded = len(best_seed_by_target) - before_bridge
 
+            if raw_expand_rcs_scale < 0 or raw_expand_absv_scale < 0:
+                raise ValueError('raw expansion feature scales must be non-negative')
             for target, i in best_seed_by_target.items():
                 point = original_points[i].copy()
                 point['SR_x'] = (target[0] + 0.5) * voxel_x
                 point['SR_y'] = (target[1] + 0.5) * voxel_y
                 point['SR_range'] = float(math.sqrt(
                     point['SR_x'] ** 2 + point['SR_y'] ** 2 + point['SR_z'] ** 2))
+                point['RCS'] *= float(raw_expand_rcs_scale)
+                point['AbsV'] *= float(raw_expand_absv_scale)
                 point['is_sr'] = 1
                 expanded_points.append(point)
 
@@ -3449,6 +3457,10 @@ def main():
     parser.add_argument('--raw_expand_max_range', type=float, default=50.0)
     parser.add_argument('--raw_expand_voxel_size', type=float, nargs=2,
                         default=(0.25, 0.20), metavar=('VOXEL_X', 'VOXEL_Y'))
+    parser.add_argument('--raw_expand_rcs_scale', type=float, default=1.0,
+                        help='合成原始支持点的 RCS 缩放')
+    parser.add_argument('--raw_expand_absv_scale', type=float, default=1.0,
+                        help='合成原始支持点的 AbsV 缩放')
     parser.add_argument('--expand_dense_raw', type=_parse_bool_arg, default=False,
                         help='将近距慢速、同一检测网格内多回波的原始点纵向扩展。')
     parser.add_argument('--dense_expand_min_points', type=int, default=8)
@@ -3641,6 +3653,8 @@ def main():
                 raw_expand_min_rcs=args.raw_expand_min_rcs,
                 raw_expand_max_range=args.raw_expand_max_range,
                 raw_expand_voxel_size=args.raw_expand_voxel_size,
+                raw_expand_rcs_scale=args.raw_expand_rcs_scale,
+                raw_expand_absv_scale=args.raw_expand_absv_scale,
                 expand_dense_raw=args.expand_dense_raw,
                 dense_expand_min_points=args.dense_expand_min_points,
                 dense_expand_min_rcs=args.dense_expand_min_rcs,
