@@ -2746,6 +2746,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dynamic_expand_direction: str = 'both',
                      raw_expand_rcs_scale: float = 1.0,
                      raw_expand_absv_scale: float = 1.0,
+                     raw_expand_feature_mode: str = 'source',
                      raw_expand_coordinate_mode: str = 'center',
                      dynamic_expand_adaptive_axis: bool = False,
                      dynamic_expand_axis_radius: float = 3.0,
@@ -2753,6 +2754,7 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dynamic_expand_keep_longitudinal: bool = False,
                      dynamic_expand_rcs_scale: Optional[float] = None,
                      dense_expand_rcs_scale: Optional[float] = None,
+                     dense_expand_feature_mode: Optional[str] = None,
                      expand_dense_raw: bool = False,
                      dense_expand_min_points: int = 8,
                      dense_expand_min_rcs: float = 5.0,
@@ -2827,8 +2829,13 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         dynamic_expand_direction: 动态扩展方向，``both``、``positive`` 或 ``negative``。
         raw_expand_rcs_scale/raw_expand_absv_scale: 合成原始支持点的 RCS/AbsV
             缩放；原始测量点保持精确不变。
+        raw_expand_feature_mode: 合成动态/强静态支持点的特征来源，``source``
+            复制最高RCS源点，``voxel_median`` 或 ``voxel_mean`` 使用源网格内
+            原始点的RCS/AbsV统计量。
         dynamic_expand_rcs_scale/dense_expand_rcs_scale: 可分别覆盖动态和
             密集慢速合成点的 RCS 缩放；None时继承raw_expand_rcs_scale。
+        dense_expand_feature_mode: 可单独覆盖密集慢速支持点的特征来源；None时
+            继承raw_expand_feature_mode。
         raw_expand_coordinate_mode: 合成点坐标使用目标网格中心，或复制源点
             在网格内的相对偏移（copy_offset）。
         dynamic_expand_adaptive_axis: 对高置信动态种子使用局部PCA选择扩展方向。
@@ -3349,15 +3356,53 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
             if (raw_expand_rcs_scale < 0 or raw_expand_absv_scale < 0 or
                     dynamic_rcs_scale < 0 or dense_rcs_scale < 0):
                 raise ValueError('raw expansion feature scales must be non-negative')
+            valid_feature_modes = ('source', 'voxel_median', 'voxel_mean')
+            if raw_expand_feature_mode not in valid_feature_modes:
+                raise ValueError(
+                    "raw_expand_feature_mode must be 'source', 'voxel_median' or 'voxel_mean'")
+            if (dense_expand_feature_mode is not None and
+                    dense_expand_feature_mode not in valid_feature_modes):
+                raise ValueError(
+                    "dense_expand_feature_mode must be None, 'source', 'voxel_median' or 'voxel_mean'")
             if raw_expand_coordinate_mode not in ('center', 'copy_offset'):
                 raise ValueError("raw_expand_coordinate_mode must be 'center' or 'copy_offset'")
+
+            def _matched_expand_features(source_key, seed_i, kind):
+                """Return RCS/AbsV matched from a source point or source voxel.
+
+                The source voxel statistics are computed only from raw returns;
+                no annotation or learned output participates in this step.
+                Non-finite statistics fall back to the selected source point.
+                """
+                mode = (dense_expand_feature_mode
+                        if kind == 'dense' and dense_expand_feature_mode is not None
+                        else raw_expand_feature_mode)
+                seed_rcs = _raw_field('RCS', seed_i)
+                seed_absv = _raw_field('AbsV', seed_i)
+                if mode == 'source':
+                    return seed_rcs, seed_absv
+                source_indices = raw_indices_by_voxel.get(source_key, (seed_i,))
+                rcs_values = np.asarray(
+                    [_raw_field('RCS', index) for index in source_indices], dtype=np.float32)
+                absv_values = np.asarray(
+                    [_raw_field('AbsV', index) for index in source_indices], dtype=np.float32)
+                rcs_values = rcs_values[np.isfinite(rcs_values)]
+                absv_values = absv_values[np.isfinite(absv_values)]
+                if mode == 'voxel_median':
+                    rcs = float(np.median(rcs_values)) if len(rcs_values) else seed_rcs
+                    absv = float(np.median(absv_values)) if len(absv_values) else seed_absv
+                else:
+                    rcs = float(np.mean(rcs_values)) if len(rcs_values) else seed_rcs
+                    absv = float(np.mean(absv_values)) if len(absv_values) else seed_absv
+                return rcs, absv
+
             for target, (i, kind) in best_seed_by_target.items():
                 point = original_points[i].copy()
+                source_x = _raw_field('x', i)
+                source_y = _raw_field('y', i)
+                source_key = (math.floor(source_x / voxel_x),
+                              math.floor(source_y / voxel_y))
                 if raw_expand_coordinate_mode == 'copy_offset':
-                    source_x = _raw_field('x', i)
-                    source_y = _raw_field('y', i)
-                    source_key = (math.floor(source_x / voxel_x),
-                                  math.floor(source_y / voxel_y))
                     point['SR_x'] = source_x + (target[0] - source_key[0]) * voxel_x
                     point['SR_y'] = source_y + (target[1] - source_key[1]) * voxel_y
                 else:
@@ -3371,8 +3416,9 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     rcs_scale = dense_rcs_scale
                 else:
                     rcs_scale = raw_expand_rcs_scale
-                point['RCS'] *= float(rcs_scale)
-                point['AbsV'] *= float(raw_expand_absv_scale)
+                matched_rcs, matched_absv = _matched_expand_features(source_key, i, kind)
+                point['RCS'] = matched_rcs * float(rcs_scale)
+                point['AbsV'] = matched_absv * float(raw_expand_absv_scale)
                 point['is_sr'] = 1
                 expanded_points.append(point)
 
@@ -3640,6 +3686,10 @@ def main():
                         help='合成原始支持点的 RCS 缩放')
     parser.add_argument('--raw_expand_absv_scale', type=float, default=1.0,
                         help='合成原始支持点的 AbsV 缩放')
+    parser.add_argument('--raw_expand_feature_mode',
+                        choices=['source', 'voxel_median', 'voxel_mean'],
+                        default='source',
+                        help='动态/强静态合成点的 RCS/AbsV 匹配模式')
     parser.add_argument('--raw_expand_coordinate_mode', choices=['center', 'copy_offset'],
                         default='center', help='合成点坐标的网格内位置策略')
     parser.add_argument('--dynamic_expand_adaptive_axis', type=_parse_bool_arg, default=False,
@@ -3652,6 +3702,10 @@ def main():
                         help='动态合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
     parser.add_argument('--dense_expand_rcs_scale', type=float, default=None,
                         help='密集慢速合成支持点的 RCS 缩放，默认继承 raw_expand_rcs_scale')
+    parser.add_argument('--dense_expand_feature_mode',
+                        choices=['source', 'voxel_median', 'voxel_mean'],
+                        default=None,
+                        help='密集慢速合成点的 RCS/AbsV 匹配模式，默认继承 raw_expand_feature_mode')
     parser.add_argument('--expand_dense_raw', type=_parse_bool_arg, default=False,
                         help='将近距慢速、同一检测网格内多回波的原始点纵向扩展。')
     parser.add_argument('--dense_expand_min_points', type=int, default=8)
@@ -3864,6 +3918,7 @@ def main():
                 dynamic_expand_direction=args.dynamic_expand_direction,
                 raw_expand_rcs_scale=args.raw_expand_rcs_scale,
                 raw_expand_absv_scale=args.raw_expand_absv_scale,
+                raw_expand_feature_mode=args.raw_expand_feature_mode,
                 raw_expand_coordinate_mode=args.raw_expand_coordinate_mode,
                 dynamic_expand_adaptive_axis=args.dynamic_expand_adaptive_axis,
                 dynamic_expand_axis_radius=args.dynamic_expand_axis_radius,
@@ -3871,6 +3926,7 @@ def main():
                 dynamic_expand_keep_longitudinal=args.dynamic_expand_keep_longitudinal,
                 dynamic_expand_rcs_scale=args.dynamic_expand_rcs_scale,
                 dense_expand_rcs_scale=args.dense_expand_rcs_scale,
+                dense_expand_feature_mode=args.dense_expand_feature_mode,
                 expand_dense_raw=args.expand_dense_raw,
                 dense_expand_min_points=args.dense_expand_min_points,
                 dense_expand_min_rcs=args.dense_expand_min_rcs,

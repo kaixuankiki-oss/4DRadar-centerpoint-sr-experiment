@@ -529,7 +529,7 @@ points).
   Even the sparse RCS≥30 additions changed the small-data training balance,
   so this branch is not retained as the preferred strategy.
 
-## sr-29 — PCA dense support with provenance-aware RCS attenuation (running)
+## sr-29 — PCA dense support with provenance-aware RCS attenuation
 
 - Motivation: sr-7 is the strongest measured branch, while prior global
   attenuation changed both dynamic and dense evidence together. This test
@@ -540,6 +540,23 @@ points).
 - Only `dense_expand_rcs_scale=0.8` is new. Learned SR points remain disabled
   (`sr_min_rcs=1e9`), raw points are preserved exactly, `add_offset=True`,
   split/seed/config/range are unchanged, and inference does not read labels.
-- The pipeline overwrites all 970 `_SR.pcd` files, rebuilds train/val PKLs,
-  and runs the fixed 40-epoch CenterPoint experiment. The result will be
-  appended here and to the 350m comparison table before the next strategy.
+- Full overwrite inference, PKL rebuild and 40-epoch training completed. The
+  shared 970-file output was replaced in place. Best checkpoint: epoch 35,
+  mAP `0.139397`, absolute delta `-0.0547180967` versus raw; failed. The
+  attenuation changed the learned balance even though only dense points were
+  scaled, so this branch is discarded.
+
+## sr-30 — PCA dense support with voxel-median feature matching (running)
+
+- Motivation: sr-29 shows that a global dense RCS scale is not a reliable
+  feature match. For each dense slow source voxel, compute the median raw RCS
+  and AbsV over that voxel and assign those statistics to synthetic target
+  cells. This suppresses an isolated peak without applying a fixed global
+  scale. Dynamic support keeps exact source-point RCS/AbsV and all sr-7
+  geometry/gates remain unchanged.
+- New controls: `dense_expand_feature_mode=voxel_median` (with the default
+  source mode for dynamic/other support). Learned SR remains disabled,
+  `add_offset=True`, labels are not read by inference, and the split/seed/
+  CenterPoint config/range are unchanged.
+- The same 970 output paths will be overwritten, PKLs rebuilt, and the fixed
+  40-epoch training/evaluation will be launched through the host controller.
