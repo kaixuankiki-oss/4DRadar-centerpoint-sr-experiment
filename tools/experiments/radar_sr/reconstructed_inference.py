@@ -2757,6 +2757,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                      dense_expand_adaptive_axis: bool = False,
                      dense_expand_axis_radius: float = 3.0,
                      dense_expand_min_axis_ratio: float = 1.0,
+                     dense_expand_adaptive_min_range: Optional[float] = None,
+                     dense_expand_adaptive_max_range: Optional[float] = None,
                      dense_expand_lateral_steps: int = 1,
                      dense_expand_lateral_min_ratio: float = 1.0,
                      dense_expand_keep_longitudinal: bool = False,
@@ -2823,6 +2825,8 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
         dense_expand_min_axis_ratio: 仅当PCA主/次特征值比达到阈值时改为横向扩展。
         dense_expand_lateral_steps: 横向扩展的半径（网格步数）。
         dense_expand_lateral_min_ratio: 只有PCA各向异性达到该阈值时才使用额外横向步数。
+        dense_expand_adaptive_min_range/max_range: PCA方向切换的距离门控；
+            不满足时保留默认纵向方向。
         dense_expand_keep_longitudinal: 自适应横向扩展时同时保留原纵向邻格。
         dense_expand_require_adaptive_axis: 丢弃未通过PCA横向门控的普通密集慢速种子。
         bridge_dense_raw: 在高各向异性横向慢速密集种子之间插值内部空网格。
@@ -3140,6 +3144,10 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     raise ValueError('dense_expand_lateral_steps must be at least 1')
                 if dense_expand_lateral_min_ratio <= 0:
                     raise ValueError('dense_expand_lateral_min_ratio must be positive')
+                if (dense_expand_adaptive_min_range is not None and
+                        dense_expand_adaptive_max_range is not None and
+                        dense_expand_adaptive_min_range >= dense_expand_adaptive_max_range):
+                    raise ValueError('dense adaptive range gate must be increasing')
                 dense_seeds = []
                 for source, voxel_indices in raw_indices_by_voxel.items():
                     if len(voxel_indices) < dense_expand_min_points:
@@ -3162,7 +3170,19 @@ def process_pcd_file(input_path: str, output_path: Optional[str], model: nn.Modu
                     offsets = ((-1, 0), (1, 0))
                     adaptive_lateral = False
                     axis_ratio = 0.0
-                    if dense_expand_adaptive_axis and len(dense_centers) >= 2:
+                    adaptive_range_allowed = (
+                        (dense_expand_adaptive_min_range is None or
+                         _raw_field('range', seed_i, np.linalg.norm([
+                             _raw_field('x', seed_i), _raw_field('y', seed_i),
+                             _raw_field('z', seed_i)])) >= dense_expand_adaptive_min_range)
+                        and
+                        (dense_expand_adaptive_max_range is None or
+                         _raw_field('range', seed_i, np.linalg.norm([
+                             _raw_field('x', seed_i), _raw_field('y', seed_i),
+                             _raw_field('z', seed_i)])) < dense_expand_adaptive_max_range)
+                    )
+                    if (dense_expand_adaptive_axis and adaptive_range_allowed and
+                            len(dense_centers) >= 2):
                         delta = dense_centers - dense_centers[seed_index]
                         nearby = dense_centers[
                             np.sum(delta * delta, axis=1) <= dense_expand_axis_radius ** 2
@@ -3539,6 +3559,10 @@ def main():
                         help='以邻近合格密集网格的PCA主轴选择纵向或横向扩展。')
     parser.add_argument('--dense_expand_axis_radius', type=float, default=3.0)
     parser.add_argument('--dense_expand_min_axis_ratio', type=float, default=1.0)
+    parser.add_argument('--dense_expand_adaptive_min_range', type=float, default=None,
+                        help='PCA方向切换的最小距离（米）')
+    parser.add_argument('--dense_expand_adaptive_max_range', type=float, default=None,
+                        help='PCA方向切换的最大距离（米，右开）')
     parser.add_argument('--dense_expand_lateral_steps', type=int, default=1,
                         help='PCA横向密集簇扩展的最大网格步数')
     parser.add_argument('--dense_expand_lateral_min_ratio', type=float, default=1.0,
@@ -3738,6 +3762,8 @@ def main():
                 dense_expand_adaptive_axis=args.dense_expand_adaptive_axis,
                 dense_expand_axis_radius=args.dense_expand_axis_radius,
                 dense_expand_min_axis_ratio=args.dense_expand_min_axis_ratio,
+                dense_expand_adaptive_min_range=args.dense_expand_adaptive_min_range,
+                dense_expand_adaptive_max_range=args.dense_expand_adaptive_max_range,
                 dense_expand_lateral_steps=args.dense_expand_lateral_steps,
                 dense_expand_lateral_min_ratio=args.dense_expand_lateral_min_ratio,
                 dense_expand_keep_longitudinal=args.dense_expand_keep_longitudinal,

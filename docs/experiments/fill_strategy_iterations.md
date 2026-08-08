@@ -341,7 +341,7 @@ points).
   `-0.1479267840`; failed. Copying intra-voxel offsets did not preserve the
   late convergence, so sr-7's grid-center placement remains preferable.
 
-## sr-18 — anisotropy-aware dynamic support (running)
+## sr-18 — anisotropy-aware dynamic support
 
 - Motivation: sr-7 only orients dense slow cells. High-confidence dynamic raw
   cells are still expanded along a fixed longitudinal axis, which can widen
@@ -351,5 +351,19 @@ points).
   sr-7's longitudinal offsets when the cluster is not strongly anisotropic.
   Dynamic and dense feature values, point count, output root, split and
   CenterPoint settings remain unchanged.
-- Status: implementation and full overwrite/PKL/training pipeline are being
-  prepared; sr-7's grid-center output remains the reference geometry.
+- Full overwrite inference, PKL rebuild, and fixed-config training completed.
+  Best result: epoch 36, mAP `0.1811603636`, absolute delta
+  `-0.0129547330`; failed. The dynamic PCA gate improved over several feature
+  ablations but still lost sr-7's vehicle/Cyclist balance.
+
+## sr-19 — range-isolated lateral correction (running)
+
+- Motivation: the missed stationary validation Tricycle's two dense cells are
+  around 42–43m with local PCA ratios above 10. sr-19 keeps sr-6's strong
+  longitudinal vehicle support everywhere, and permits lateral PCA orientation
+  only for dense seeds in the label-independent 40–45m band.
+- This narrows sr-7's orientation change from thousands of cells to the small
+  feature/range-defined subset around the observed cross-traffic geometry;
+  all raw points and feature values remain exact.
+- Status: full overwrite inference, PKL rebuild and 40-epoch training are
+  running through the host controller.

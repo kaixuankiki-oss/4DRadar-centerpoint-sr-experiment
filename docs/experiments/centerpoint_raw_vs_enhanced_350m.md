@@ -73,7 +73,8 @@ the required comparison is now an absolute difference of at least `+0.050`
 | sr-15 | sr-7 geometry with synthetic-support RCS × 1.5 | `checkpoint_epoch_40.pth` | 0.038535 | -0.155580 | failed; amplified support removed Cyclist detections |
 | sr-16 | sr-7 geometry, dynamic RCS × 1.0 and dense RCS × 0.5 | `checkpoint_epoch_40.pth` | 0.041811 | -0.152304 | failed; provenance-aware scaling did not recover convergence |
 | sr-17 | sr-7 geometry with source-cell-relative synthetic coordinates | `checkpoint_epoch_40.pth` | 0.046188 | -0.147927 | failed; intra-voxel offset copy did not preserve convergence |
-| sr-18 | sr-7 plus anisotropy-aware dynamic support | pending | — | — | running; strong-PCA dynamic orientation with longitudinal fallback |
+| sr-18 | sr-7 plus anisotropy-aware dynamic support | `checkpoint_epoch_36.pth` | 0.181160 | -0.012955 | failed; dynamic PCA still lost vehicle/Cyclist balance |
+| sr-19 | sr-6 plus lateral PCA only for dense seeds at 40–45m | pending | — | — | running; range-isolated correction for stationary cross-traffic |
 
 No mAP value is fabricated.  GPU access is available through the host execution
 environment (the default Codex sandbox intentionally hides `/dev/nvidia*`).
